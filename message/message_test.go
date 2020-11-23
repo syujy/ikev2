@@ -298,7 +298,7 @@ func TestEncodeDecode(t *testing.T) {
 
 	testSK := new(Encrypted)
 
-	testSK.NextPayload = TypeSA
+	testSK.NextPayload = 33
 
 	ikePayload := IKEPayloadContainer{
 		testSA,
