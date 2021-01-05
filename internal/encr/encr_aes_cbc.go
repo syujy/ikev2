@@ -7,25 +7,26 @@ import (
 	"encoding/hex"
 	"errors"
 	"ike/internal/lib"
-	"ike/internal/types"
+	itypes "ike/internal/types"
+	types "ike/types"
 	"io"
 )
 
 const (
-	String_ENCR_AES_CBC_128 string = "ENCR_AES_CBC_128"
-	String_ENCR_AES_CBC_192 string = "ENCR_AES_CBC_192"
-	String_ENCR_AES_CBC_256 string = "ENCR_AES_CBC_256"
+	string_ENCR_AES_CBC_128 string = "ENCR_AES_CBC_128"
+	string_ENCR_AES_CBC_192 string = "ENCR_AES_CBC_192"
+	string_ENCR_AES_CBC_256 string = "ENCR_AES_CBC_256"
 )
 
 func toString_ENCR_AES_CBC(attrType uint16, intValue uint16, bytesValue []byte) string {
 	if attrType == types.AttributeTypeKeyLength {
 		switch intValue {
 		case 128:
-			return String_ENCR_AES_CBC_128
+			return string_ENCR_AES_CBC_128
 		case 192:
-			return String_ENCR_AES_CBC_192
+			return string_ENCR_AES_CBC_192
 		case 256:
-			return String_ENCR_AES_CBC_256
+			return string_ENCR_AES_CBC_256
 		default:
 			return ""
 		}
@@ -62,9 +63,12 @@ func (t *ENCR_AES_CBC) GetKeyLength() int {
 	return t.keyLength
 }
 
-func (t *ENCR_AES_CBC) Init(key []byte) types.IKECrypto {
+func (t *ENCR_AES_CBC) Init(key []byte) itypes.IKECrypto {
 	var err error
 	encr := new(ENCR_AES_CBC_Crypto)
+	if len(key) != t.keyLength {
+		return nil
+	}
 	if encr.block, err = aes.NewCipher(key); err != nil {
 		encrLog.Errorf("Error occur when create new cipher: %+v", err)
 		return nil
@@ -77,7 +81,7 @@ func (t *ENCR_AES_CBC) XFRMString() string {
 	return "cbc(aes)"
 }
 
-var _ types.IKECrypto = &ENCR_AES_CBC_Crypto{}
+var _ itypes.IKECrypto = &ENCR_AES_CBC_Crypto{}
 
 type ENCR_AES_CBC_Crypto struct {
 	block cipher.Block

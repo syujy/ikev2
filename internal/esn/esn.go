@@ -3,8 +3,8 @@ package esn
 import (
 	"errors"
 	"ike/internal/logger"
-	"ike/internal/types"
 	"ike/message"
+	"ike/types"
 
 	"github.com/sirupsen/logrus"
 )
@@ -25,13 +25,13 @@ func init() {
 	// ESN Types
 	esnTypes = make(map[string]ESNType)
 
-	esnTypes[String_ESN_ENABLE] = &ESN_ENABLE{}
-	esnTypes[String_ESN_DISABLE] = &ESN_DISABLE{}
+	esnTypes[string_ESN_ENABLE] = &ESN_ENABLE{}
+	esnTypes[string_ESN_DISABLE] = &ESN_DISABLE{}
 
 	// Default Priority
 	priority := []string{
-		String_ESN_DISABLE,
-		String_ESN_ENABLE,
+		string_ESN_ENABLE,
+		string_ESN_DISABLE,
 	}
 
 	// Set Priority
@@ -45,16 +45,16 @@ func init() {
 	}
 }
 
-func SetPriority(algolist []string) error {
+func SetPriority(algolist map[string]uint32) error {
 	// check implemented
-	for _, algo := range algolist {
+	for algo := range algolist {
 		if _, ok := esnTypes[algo]; !ok {
 			return errors.New("No such implementation")
 		}
 	}
 	// set priority
-	for i, algo := range algolist {
-		esnTypes[algo].setPriority(uint32(i))
+	for algo, priority := range algolist {
+		esnTypes[algo].setPriority(uint32(priority))
 	}
 	return nil
 }
@@ -90,7 +90,7 @@ func ToTransform(esnType ESNType) *message.Transform {
 	t.TransformID = esnType.transformID()
 	t.AttributePresent, t.AttributeType, t.AttributeValue, t.VariableLengthAttributeValue = esnType.getAttribute()
 	if t.AttributePresent && t.VariableLengthAttributeValue == nil {
-		t.AttributeFormat = 1 // TV
+		t.AttributeFormat = types.AttributeFormatUseTV
 	}
 	return t
 }

@@ -4,13 +4,13 @@ import (
 	"crypto/hmac"
 	"crypto/sha1"
 	"hash"
-	"ike/internal/types"
+	"ike/types"
 )
 
-const String_PRF_HMAC_SHA1 string = "PRF_HMAC_SHA1"
+const string_PRF_HMAC_SHA1 string = "PRF_HMAC_SHA1"
 
 func toString_PRF_HMAC_SHA1(attrType uint16, intValue uint16, bytesValue []byte) string {
-	return String_PRF_HMAC_SHA1
+	return string_PRF_HMAC_SHA1
 }
 
 var _ PRFType = &PRF_HMAC_SHA1{}

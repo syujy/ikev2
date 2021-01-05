@@ -4,13 +4,13 @@ import (
 	"crypto/hmac"
 	"crypto/sha1"
 	"hash"
-	"ike/internal/types"
+	"ike/types"
 )
 
-const String_AUTH_HMAC_SHA1_96 string = "AUTH_HMAC_SHA1_96"
+const string_AUTH_HMAC_SHA1_96 string = "AUTH_HMAC_SHA1_96"
 
 func toString_AUTH_HMAC_SHA1_96(attrType uint16, intValue uint16, bytesValue []byte) string {
-	return String_AUTH_HMAC_SHA1_96
+	return string_AUTH_HMAC_SHA1_96
 }
 
 var _ INTEGType = &AUTH_HMAC_SHA1_96{}

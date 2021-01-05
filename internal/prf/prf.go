@@ -5,8 +5,8 @@ import (
 	"hash"
 
 	"ike/internal/logger"
-	"ike/internal/types"
 	"ike/message"
+	"ike/types"
 
 	"github.com/sirupsen/logrus"
 )
@@ -27,19 +27,19 @@ func init() {
 	// PRF Types
 	prfTypes = make(map[string]PRFType)
 
-	prfTypes[String_PRF_HMAC_MD5] = &PRF_HMAC_MD5{
+	prfTypes[string_PRF_HMAC_MD5] = &PRF_HMAC_MD5{
 		keyLength:    16,
 		outputLength: 16,
 	}
-	prfTypes[String_PRF_HMAC_SHA1] = &PRF_HMAC_SHA1{
+	prfTypes[string_PRF_HMAC_SHA1] = &PRF_HMAC_SHA1{
 		keyLength:    20,
 		outputLength: 20,
 	}
 
 	// Default Priority
 	priority := []string{
-		String_PRF_HMAC_MD5,
-		String_PRF_HMAC_SHA1,
+		string_PRF_HMAC_MD5,
+		string_PRF_HMAC_SHA1,
 	}
 
 	// Set Priority
@@ -53,16 +53,16 @@ func init() {
 	}
 }
 
-func SetPriority(algolist []string) error {
+func SetPriority(algolist map[string]uint32) error {
 	// check implemented
-	for _, algo := range algolist {
+	for algo := range algolist {
 		if _, ok := prfTypes[algo]; !ok {
 			return errors.New("No such implementation")
 		}
 	}
 	// set priority
-	for i, algo := range algolist {
-		prfTypes[algo].setPriority(uint32(i))
+	for algo, priority := range algolist {
+		prfTypes[algo].setPriority(uint32(priority))
 	}
 	return nil
 }
@@ -98,7 +98,7 @@ func ToTransform(prfType PRFType) *message.Transform {
 	t.TransformID = prfType.transformID()
 	t.AttributePresent, t.AttributeType, t.AttributeValue, t.VariableLengthAttributeValue = prfType.getAttribute()
 	if t.AttributePresent && t.VariableLengthAttributeValue == nil {
-		t.AttributeFormat = 1 // TV
+		t.AttributeFormat = types.AttributeFormatUseTV
 	}
 	return t
 }
@@ -112,18 +112,3 @@ type PRFType interface {
 	GetOutputLength() int
 	Init(key []byte) hash.Hash
 }
-
-/*
-// Pseudorandom Funciton
-func NewPseudorandomFunction(key []byte, algorithmType uint16) hash.Hash {
-	switch algorithmType {
-	case message.PRF_HMAC_MD5:
-		return hmac.New(md5.New, key)
-	case message.PRF_HMAC_SHA1:
-		return hmac.New(sha1.New, key)
-	default:
-		secLog.Errorf("Unsupported pseudo random function: %d", algorithmType)
-		return nil
-	}
-}
-*/

@@ -1,10 +1,11 @@
 package encr
 
 import (
-	"errors"
+	"fmt"
 	"ike/internal/logger"
-	"ike/internal/types"
+	itypes "ike/internal/types"
 	"ike/message"
+	types "ike/types"
 
 	"github.com/sirupsen/logrus"
 )
@@ -26,21 +27,21 @@ func init() {
 	// ENCR Types
 	encrTypes = make(map[string]ENCRType)
 
-	encrTypes[String_ENCR_AES_CBC_128] = &ENCR_AES_CBC{
+	encrTypes[string_ENCR_AES_CBC_128] = &ENCR_AES_CBC{
 		keyLength: 16,
 	}
-	encrTypes[String_ENCR_AES_CBC_192] = &ENCR_AES_CBC{
+	encrTypes[string_ENCR_AES_CBC_192] = &ENCR_AES_CBC{
 		keyLength: 24,
 	}
-	encrTypes[String_ENCR_AES_CBC_256] = &ENCR_AES_CBC{
+	encrTypes[string_ENCR_AES_CBC_256] = &ENCR_AES_CBC{
 		keyLength: 32,
 	}
 
 	// Default Priority
 	priority := []string{
-		String_ENCR_AES_CBC_128,
-		String_ENCR_AES_CBC_192,
-		String_ENCR_AES_CBC_256,
+		string_ENCR_AES_CBC_128,
+		string_ENCR_AES_CBC_192,
+		string_ENCR_AES_CBC_256,
 	}
 
 	// Set Priority
@@ -56,13 +57,13 @@ func init() {
 	// ENCR Kernel Types
 	encrKTypes = make(map[string]ENCRKType)
 
-	encrKTypes[String_ENCR_AES_CBC_128] = &ENCR_AES_CBC{
+	encrKTypes[string_ENCR_AES_CBC_128] = &ENCR_AES_CBC{
 		keyLength: 16,
 	}
-	encrKTypes[String_ENCR_AES_CBC_192] = &ENCR_AES_CBC{
+	encrKTypes[string_ENCR_AES_CBC_192] = &ENCR_AES_CBC{
 		keyLength: 24,
 	}
-	encrKTypes[String_ENCR_AES_CBC_256] = &ENCR_AES_CBC{
+	encrKTypes[string_ENCR_AES_CBC_256] = &ENCR_AES_CBC{
 		keyLength: 32,
 	}
 
@@ -83,7 +84,7 @@ func SetPriority(algolist []string) error {
 	// check implemented
 	for _, algo := range algolist {
 		if _, ok := encrTypes[algo]; !ok {
-			return errors.New("No such implementation")
+			return fmt.Errorf("No such implementation: %s", algo)
 		}
 	}
 	// set priority
@@ -93,16 +94,16 @@ func SetPriority(algolist []string) error {
 	return nil
 }
 
-func SetKPriority(algolist []string) error {
+func SetKPriority(algolist map[string]uint32) error {
 	// check implemented
-	for _, algo := range algolist {
+	for algo := range algolist {
 		if _, ok := encrKTypes[algo]; !ok {
-			return errors.New("No such implementation")
+			return fmt.Errorf("No such implementation: %s", algo)
 		}
 	}
 	// set priority
-	for i, algo := range algolist {
-		encrKTypes[algo].setPriority(uint32(i))
+	for algo, priority := range algolist {
+		encrKTypes[algo].setPriority(uint32(priority))
 	}
 	return nil
 }
@@ -146,7 +147,7 @@ func ToTransform(encrType ENCRType) *message.Transform {
 	t.TransformID = encrType.transformID()
 	t.AttributePresent, t.AttributeType, t.AttributeValue, t.VariableLengthAttributeValue = encrType.getAttribute()
 	if t.AttributePresent && t.VariableLengthAttributeValue == nil {
-		t.AttributeFormat = 1 // TV
+		t.AttributeFormat = types.AttributeFormatUseTV
 	}
 	return t
 }
@@ -185,7 +186,7 @@ type ENCRType interface {
 	setPriority(uint32)
 	Priority() uint32
 	GetKeyLength() int
-	Init(key []byte) types.IKECrypto
+	Init(key []byte) itypes.IKECrypto
 }
 
 type ENCRKType interface {
@@ -218,81 +219,6 @@ func (xfrmEncryptionAlgorithmType XFRMEncryptionAlgorithmType) String() string {
 		return "rfc3686(ctr(aes))"
 	default:
 		return ""
-	}
-}
-*/
-
-/*
-// Encryption Algorithm
-func EncryptMessage(key []byte, originData []byte, algorithmType uint16) ([]byte, error) {
-	switch algorithmType {
-	case message.ENCR_AES_CBC:
-		// padding message
-		originData = PKCS7Padding(originData, aes.BlockSize)
-		originData[len(originData)-1]--
-
-		block, err := aes.NewCipher(key)
-		if err != nil {
-			secLog.Errorf("Error occur when create new cipher: %+v", err)
-			return nil, errors.New("Create cipher failed")
-		}
-
-		cipherText := make([]byte, aes.BlockSize+len(originData))
-		initializationVector := cipherText[:aes.BlockSize]
-
-		_, err = io.ReadFull(rand.Reader, initializationVector)
-		if err != nil {
-			secLog.Errorf("Read random failed: %+v", err)
-			return nil, errors.New("Read random initialization vector failed")
-		}
-
-		cbcBlockMode := cipher.NewCBCEncrypter(block, initializationVector)
-		cbcBlockMode.CryptBlocks(cipherText[aes.BlockSize:], originData)
-
-		return cipherText, nil
-	default:
-		secLog.Errorf("Unsupported encryption algorithm: %d", algorithmType)
-		return nil, errors.New("Unsupported algorithm")
-	}
-}
-
-func DecryptMessage(key []byte, cipherText []byte, algorithmType uint16) ([]byte, error) {
-	switch algorithmType {
-	case message.ENCR_AES_CBC:
-		if len(cipherText) < aes.BlockSize {
-			secLog.Error("Length of cipher text is too short to decrypt")
-			return nil, errors.New("Cipher text is too short")
-		}
-
-		initializationVector := cipherText[:aes.BlockSize]
-		encryptedMessage := cipherText[aes.BlockSize:]
-
-		if len(encryptedMessage)%aes.BlockSize != 0 {
-			secLog.Error("Cipher text is not a multiple of block size")
-			return nil, errors.New("Cipher text length error")
-		}
-
-		plainText := make([]byte, len(encryptedMessage))
-
-		block, err := aes.NewCipher(key)
-		if err != nil {
-			secLog.Errorf("Error occur when create new cipher: %+v", err)
-			return nil, errors.New("Create cipher failed")
-		}
-		cbcBlockMode := cipher.NewCBCDecrypter(block, initializationVector)
-		cbcBlockMode.CryptBlocks(plainText, encryptedMessage)
-
-		secLog.Tracef("Decrypted content:\n%s", hex.Dump(plainText))
-
-		padding := int(plainText[len(plainText)-1]) + 1
-		plainText = plainText[:len(plainText)-padding]
-
-		secLog.Tracef("Decrypted content with out padding:\n%s", hex.Dump(plainText))
-
-		return plainText, nil
-	default:
-		secLog.Errorf("Unsupported encryption algorithm: %d", algorithmType)
-		return nil, errors.New("Unsupported algorithm")
 	}
 }
 */

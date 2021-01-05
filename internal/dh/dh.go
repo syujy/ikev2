@@ -1,12 +1,12 @@
 package dh
 
 import (
-	"errors"
+	"fmt"
 	"math/big"
 
 	"ike/internal/logger"
-	"ike/internal/types"
 	"ike/message"
+	"ike/types"
 
 	"github.com/sirupsen/logrus"
 )
@@ -36,7 +36,7 @@ func init() {
 		panic("IKE Diffie Hellman Group failed to init.")
 	}
 	generator = new(big.Int).SetUint64(Group2Generator)
-	dhTypes[String_DH_1024_BIT_MODP] = &DH_1024_BIT_MODP{
+	dhTypes[string_DH_1024_BIT_MODP] = &DH_1024_BIT_MODP{
 		factor:            factor,
 		generator:         generator,
 		factorBytesLength: len(factor.Bytes()),
@@ -49,7 +49,7 @@ func init() {
 		panic("IKE Diffie Hellman Group failed to init.")
 	}
 	generator = new(big.Int).SetUint64(Group14Generator)
-	dhTypes[String_DH_2048_BIT_MODP] = &DH_2048_BIT_MODP{
+	dhTypes[string_DH_2048_BIT_MODP] = &DH_2048_BIT_MODP{
 		factor:            factor,
 		generator:         generator,
 		factorBytesLength: len(factor.Bytes()),
@@ -57,8 +57,8 @@ func init() {
 
 	// Default Priority
 	priority := []string{
-		String_DH_1024_BIT_MODP,
-		String_DH_2048_BIT_MODP,
+		string_DH_1024_BIT_MODP,
+		string_DH_2048_BIT_MODP,
 	}
 
 	// Set Priority
@@ -72,50 +72,16 @@ func init() {
 	}
 }
 
-// Definition of Diffie-Hellman groups
-// The strength supplied by group 1 may not be sufficient for typical usage
-const (
-	// Group 2
-	Group2PrimeString string = "FFFFFFFFFFFFFFFFC90FDAA22168C234" +
-		"C4C6628B80DC1CD129024E088A67CC74" +
-		"020BBEA63B139B22514A08798E3404DD" +
-		"EF9519B3CD3A431B302B0A6DF25F1437" +
-		"4FE1356D6D51C245E485B576625E7EC6" +
-		"F44C42E9A637ED6B0BFF5CB6F406B7ED" +
-		"EE386BFB5A899FA5AE9F24117C4B1FE6" +
-		"49286651ECE65381FFFFFFFFFFFFFFFF"
-	Group2Generator = 2
-
-	// Group 14
-	Group14PrimeString string = "FFFFFFFFFFFFFFFFC90FDAA22168C234" +
-		"C4C6628B80DC1CD129024E088A67CC74" +
-		"020BBEA63B139B22514A08798E3404DD" +
-		"EF9519B3CD3A431B302B0A6DF25F1437" +
-		"4FE1356D6D51C245E485B576625E7EC6" +
-		"F44C42E9A637ED6B0BFF5CB6F406B7ED" +
-		"EE386BFB5A899FA5AE9F24117C4B1FE6" +
-		"49286651ECE45B3DC2007CB8A163BF05" +
-		"98DA48361C55D39A69163FA8FD24CF5F" +
-		"83655D23DCA3AD961C62F356208552BB" +
-		"9ED529077096966D670C354E4ABC9804" +
-		"F1746C08CA18217C32905E462E36CE3B" +
-		"E39E772C180E86039B2783A2EC07A28F" +
-		"B5C55DF06F4C52C9DE2BCBF695581718" +
-		"3995497CEA956AE515D2261898FA0510" +
-		"15728E5A8AACAA68FFFFFFFFFFFFFFFF"
-	Group14Generator = 2
-)
-
-func SetPriority(algolist []string) error {
+func SetPriority(algolist map[string]uint32) error {
 	// check implemented
-	for _, algo := range algolist {
+	for algo := range algolist {
 		if _, ok := dhTypes[algo]; !ok {
-			return errors.New("No such implementation")
+			return fmt.Errorf("No such implementation: %s", algo)
 		}
 	}
 	// set priority
-	for i, algo := range algolist {
-		dhTypes[algo].setPriority(uint32(i))
+	for algo, priority := range algolist {
+		dhTypes[algo].setPriority(uint32(priority))
 	}
 	return nil
 }
@@ -151,7 +117,7 @@ func ToTransform(dhType DHType) *message.Transform {
 	t.TransformID = dhType.transformID()
 	t.AttributePresent, t.AttributeType, t.AttributeValue, t.VariableLengthAttributeValue = dhType.getAttribute()
 	if t.AttributePresent && t.VariableLengthAttributeValue == nil {
-		t.AttributeFormat = 1 // TV
+		t.AttributeFormat = types.AttributeFormatUseTV
 	}
 	return t
 }
@@ -164,15 +130,3 @@ type DHType interface {
 	GetSharedKey(secret, peerPublicValue *big.Int) []byte
 	GetPublicValue(secret *big.Int) []byte
 }
-
-/*
-func CalculateDiffieHellmanMaterials(secret *big.Int, peerPublicValue []byte,
-	dhGroupNumber uint16) ([]byte, []byte) {
-	if calc, ok := calculator[dhGroupNumber]; ok {
-		return calc(secret, peerPublicValue)
-	} else {
-		secLog.Errorf("Unsupported Diffie-Hellman group: %d", dhGroupNumber)
-		return nil, nil
-	}
-}
-*/

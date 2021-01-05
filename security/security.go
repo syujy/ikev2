@@ -19,8 +19,9 @@ import (
 	"ike/internal/lib"
 	"ike/internal/logger"
 	"ike/internal/prf"
-	"ike/internal/types"
+	itypes "ike/internal/types"
 	"ike/message"
+	types "ike/types"
 
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -38,7 +39,7 @@ func init() {
 	secLog = logger.SecLog
 	// General data
 	randomNumberMaximum.SetString(strings.Repeat("F", 512), 16)
-	randomNumberMinimum.SetString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", 16)
+	randomNumberMinimum.SetString(strings.Repeat("F", 32), 16)
 }
 
 func GenerateRandomNumber() *big.Int {
@@ -91,13 +92,13 @@ type IKESA struct {
 	prfInfo   prf.PRFType
 
 	// Security objects
-	Prf_d   hash.Hash       // used to derive key for child sa
-	Integ_i hash.Hash       // used by initiator for integrity checking
-	Integ_r hash.Hash       // used by responder for integrity checking
-	Encr_i  types.IKECrypto // used by initiator for encrypting
-	Encr_r  types.IKECrypto // used by responder for encrypting
-	Prf_i   hash.Hash       // used by initiator for IKE authentication
-	Prf_r   hash.Hash       // used by responder for IKE authentication
+	Prf_d   hash.Hash        // used to derive key for child sa
+	Integ_i hash.Hash        // used by initiator for integrity checking
+	Integ_r hash.Hash        // used by responder for integrity checking
+	Encr_i  itypes.IKECrypto // used by initiator for encrypting
+	Encr_r  itypes.IKECrypto // used by responder for encrypting
+	Prf_i   hash.Hash        // used by initiator for IKE authentication
+	Prf_r   hash.Hash        // used by responder for IKE authentication
 }
 
 func (ikesa *IKESA) SelectProposal(proposal *message.Proposal) bool {
@@ -290,7 +291,7 @@ func (ikesa *IKESA) GenerateKey(concatenatedNonce, dhSharedKey []byte) error {
 	return nil
 }
 
-func (ikesa *IKESA) VerifyChecksum(role int, data []byte) bool {
+func (ikesa *IKESA) VerifyIKEChecksum(role int, data []byte) bool {
 	checksumLen := ikesa.integInfo.GetOutputLength()
 	if len(data) <= checksumLen {
 		return false
@@ -519,7 +520,7 @@ func (childsa *ChildSA) SetProposal(proposal *message.Proposal) bool {
 			return false
 		}
 	}
-	if childsa.esnInfo = esn.DecodeTransform(proposal.PseudorandomFunction[0]); childsa.esnInfo == nil {
+	if childsa.esnInfo = esn.DecodeTransform(proposal.ExtendedSequenceNumbers[0]); childsa.esnInfo == nil {
 		return false
 	}
 	return true

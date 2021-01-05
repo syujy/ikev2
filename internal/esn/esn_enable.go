@@ -1,13 +1,13 @@
 package esn
 
 import (
-	"ike/internal/types"
+	"ike/types"
 )
 
-const String_ESN_ENABLE string = "ESN_ENABLE"
+const string_ESN_ENABLE string = "ESN_ENABLE"
 
 func toString_ESN_ENABLE(attrType uint16, intValue uint16, bytesValue []byte) string {
-	return String_ESN_ENABLE
+	return string_ESN_ENABLE
 }
 
 var _ ESNType = &ESN_ENABLE{}
