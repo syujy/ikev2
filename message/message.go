@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	"ike/internal/logger"
-	"ike/internal/types"
+	"ike/types"
 
 	"github.com/sirupsen/logrus"
 )
