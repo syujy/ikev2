@@ -1,32 +1,45 @@
-package handler
+package security
 
 import (
-	"bytes"
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/hmac"
-	"crypto/md5"
 	"crypto/rand"
-	"crypto/sha1"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"hash"
 	"io"
 	"math/big"
+	"net"
 	"strings"
 
-	"bitbucket.org/free5gc-team/n3iwf/context"
-	"bitbucket.org/free5gc-team/n3iwf/ike/message"
+	"ike/internal/dh"
+	"ike/internal/encr"
+	"ike/internal/esn"
+	"ike/internal/integ"
+	"ike/internal/lib"
+	"ike/internal/logger"
+	"ike/internal/prf"
+	itypes "ike/internal/types"
+	"ike/message"
+	types "ike/types"
+
+	"github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 )
+
+// Log
+var secLog *logrus.Entry
 
 // General data
 var randomNumberMaximum big.Int
 var randomNumberMinimum big.Int
 
 func init() {
+	// Log
+	secLog = logger.SecLog
+	// General data
 	randomNumberMaximum.SetString(strings.Repeat("F", 512), 16)
-	randomNumberMinimum.SetString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", 16)
+	randomNumberMinimum.SetString(strings.Repeat("F", 32), 16)
 }
 
 func GenerateRandomNumber() *big.Int {
@@ -35,7 +48,7 @@ func GenerateRandomNumber() *big.Int {
 	for {
 		number, err = rand.Int(rand.Reader, &randomNumberMaximum)
 		if err != nil {
-			ikeLog.Errorf("Error occurs when generate random number: %+v", err)
+			secLog.Errorf("Error occurs when generate random number: %+v", err)
 			return nil
 		} else {
 			if number.Cmp(&randomNumberMinimum) == 1 {
@@ -50,124 +63,736 @@ func GenerateRandomUint8() (uint8, error) {
 	number := make([]byte, 1)
 	_, err := io.ReadFull(rand.Reader, number)
 	if err != nil {
-		ikeLog.Errorf("Read random failed: %+v", err)
+		secLog.Errorf("Read random failed: %+v", err)
 		return 0, errors.New("Read failed")
 	}
 	return uint8(number[0]), nil
 }
 
-// Diffie-Hellman Exchange
-// The strength supplied by group 1 may not be sufficient for typical uses
-const (
-	Group2PrimeString string = "FFFFFFFFFFFFFFFFC90FDAA22168C234" +
-		"C4C6628B80DC1CD129024E088A67CC74" +
-		"020BBEA63B139B22514A08798E3404DD" +
-		"EF9519B3CD3A431B302B0A6DF25F1437" +
-		"4FE1356D6D51C245E485B576625E7EC6" +
-		"F44C42E9A637ED6B0BFF5CB6F406B7ED" +
-		"EE386BFB5A899FA5AE9F24117C4B1FE6" +
-		"49286651ECE65381FFFFFFFFFFFFFFFF"
-	Group2Generator           = 2
-	Group14PrimeString string = "FFFFFFFFFFFFFFFFC90FDAA22168C234" +
-		"C4C6628B80DC1CD129024E088A67CC74" +
-		"020BBEA63B139B22514A08798E3404DD" +
-		"EF9519B3CD3A431B302B0A6DF25F1437" +
-		"4FE1356D6D51C245E485B576625E7EC6" +
-		"F44C42E9A637ED6B0BFF5CB6F406B7ED" +
-		"EE386BFB5A899FA5AE9F24117C4B1FE6" +
-		"49286651ECE45B3DC2007CB8A163BF05" +
-		"98DA48361C55D39A69163FA8FD24CF5F" +
-		"83655D23DCA3AD961C62F356208552BB" +
-		"9ED529077096966D670C354E4ABC9804" +
-		"F1746C08CA18217C32905E462E36CE3B" +
-		"E39E772C180E86039B2783A2EC07A28F" +
-		"B5C55DF06F4C52C9DE2BCBF695581718" +
-		"3995497CEA956AE515D2261898FA0510" +
-		"15728E5A8AACAA68FFFFFFFFFFFFFFFF"
-	Group14Generator = 2
-)
+func concatenateNonceAndSPI(nonce []byte, SPI_initiator uint64, SPI_responder uint64) []byte {
+	spi := make([]byte, 8)
 
-func CalculateDiffieHellmanMaterials(secret *big.Int, peerPublicValue []byte,
-	diffieHellmanGroupNumber uint16) (localPublicValue []byte, sharedKey []byte) {
+	binary.BigEndian.PutUint64(spi, SPI_initiator)
+	newSlice := append(nonce, spi...)
+	binary.BigEndian.PutUint64(spi, SPI_responder)
+	newSlice = append(newSlice, spi...)
+
+	return newSlice
+}
+
+type IKESA struct {
+	// SPI
+	RemoteSPI uint64
+	LocalSPI  uint64
+
+	// IKE SA transform types
+	dhInfo    dh.DHType
+	encrInfo  encr.ENCRType
+	integInfo integ.INTEGType
+	prfInfo   prf.PRFType
+
+	// Security objects
+	Prf_d   hash.Hash        // used to derive key for child sa
+	Integ_i hash.Hash        // used by initiator for integrity checking
+	Integ_r hash.Hash        // used by responder for integrity checking
+	Encr_i  itypes.IKECrypto // used by initiator for encrypting
+	Encr_r  itypes.IKECrypto // used by responder for encrypting
+	Prf_i   hash.Hash        // used by initiator for IKE authentication
+	Prf_r   hash.Hash        // used by responder for IKE authentication
+}
+
+func (ikesa *IKESA) SelectProposal(proposal *message.Proposal) bool {
+	for _, transform := range proposal.DiffieHellmanGroup {
+		dhType := dh.DecodeTransform(transform)
+		if dhType != nil {
+			if ikesa.dhInfo == nil {
+				ikesa.dhInfo = dhType
+			} else {
+				if dhType.Priority() > ikesa.dhInfo.Priority() {
+					ikesa.dhInfo = dhType
+				}
+			}
+		}
+	}
+	if ikesa.dhInfo == nil {
+		return false // mandatory
+	}
+	for _, transform := range proposal.EncryptionAlgorithm {
+		encrType := encr.DecodeTransform(transform)
+		if encrType != nil {
+			if ikesa.encrInfo == nil {
+				ikesa.encrInfo = encrType
+			} else {
+				if encrType.Priority() > ikesa.encrInfo.Priority() {
+					ikesa.encrInfo = encrType
+				}
+			}
+		}
+	}
+	if ikesa.encrInfo == nil {
+		return false // mandatory
+	}
+	for _, transform := range proposal.IntegrityAlgorithm {
+		integType := integ.DecodeTransform(transform)
+		if integType != nil {
+			if ikesa.integInfo == nil {
+				ikesa.integInfo = integType
+			} else {
+				if integType.Priority() > ikesa.integInfo.Priority() {
+					ikesa.integInfo = integType
+				}
+			}
+		}
+	}
+	if ikesa.integInfo == nil {
+		return false // mandatory
+	}
+	for _, transform := range proposal.PseudorandomFunction {
+		prfType := prf.DecodeTransform(transform)
+		if prfType != nil {
+			if ikesa.prfInfo == nil {
+				ikesa.prfInfo = prfType
+			} else {
+				if prfType.Priority() > ikesa.prfInfo.Priority() {
+					ikesa.prfInfo = prfType
+				}
+			}
+		}
+	}
+	if ikesa.prfInfo == nil {
+		return false // mandatory
+	}
+	if len(proposal.ExtendedSequenceNumbers) > 0 {
+		return false // No ESN
+	}
+	return true
+}
+
+func (ikesa *IKESA) ToProposal() *message.Proposal {
+	p := new(message.Proposal)
+	p.ProtocolID = types.TypeIKE
+	p.DiffieHellmanGroup = append(p.DiffieHellmanGroup, dh.ToTransform(ikesa.dhInfo))
+	p.PseudorandomFunction = append(p.PseudorandomFunction, prf.ToTransform(ikesa.prfInfo))
+	p.EncryptionAlgorithm = append(p.EncryptionAlgorithm, encr.ToTransform(ikesa.encrInfo))
+	p.IntegrityAlgorithm = append(p.IntegrityAlgorithm, integ.ToTransform(ikesa.integInfo))
+	return p
+}
+
+func (ikesa *IKESA) SetProposal(proposal *message.Proposal) bool {
+	if ikesa.dhInfo = dh.DecodeTransform(proposal.DiffieHellmanGroup[0]); ikesa.dhInfo == nil {
+		return false
+	}
+	if ikesa.encrInfo = encr.DecodeTransform(proposal.EncryptionAlgorithm[0]); ikesa.encrInfo == nil {
+		return false
+	}
+	if ikesa.integInfo = integ.DecodeTransform(proposal.IntegrityAlgorithm[0]); ikesa.encrInfo == nil {
+		return false
+	}
+	if ikesa.prfInfo = prf.DecodeTransform(proposal.PseudorandomFunction[0]); ikesa.prfInfo == nil {
+		return false
+	}
+	return true
+}
+
+// CalcKEMaterial generates secret and calculate Diffie-Hellman public key
+// exchange material.
+// Peer public value as parameter, return local public value and shared key.
+func (ikesa *IKESA) CalcKEMaterial(peerPublicValue []byte) ([]byte, []byte) {
+	secret := GenerateRandomNumber()
 	peerPublicValueBig := new(big.Int).SetBytes(peerPublicValue)
-	var generator, factor *big.Int
-	var ok bool
-
-	switch diffieHellmanGroupNumber {
-	case message.DH_1024_BIT_MODP:
-		generator = new(big.Int).SetUint64(Group2Generator)
-		factor, ok = new(big.Int).SetString(Group2PrimeString, 16)
-		if !ok {
-			ikeLog.Errorf(
-				"Error occurs when setting big number \"factor\" in %d group",
-				diffieHellmanGroupNumber)
-		}
-	case message.DH_2048_BIT_MODP:
-		generator = new(big.Int).SetUint64(Group14Generator)
-		factor, ok = new(big.Int).SetString(Group14PrimeString, 16)
-		if !ok {
-			ikeLog.Errorf(
-				"Error occurs when setting big number \"factor\" in %d group",
-				diffieHellmanGroupNumber)
-		}
-	default:
-		ikeLog.Errorf("Unsupported Diffie-Hellman group: %d", diffieHellmanGroupNumber)
-		return
-	}
-
-	localPublicValue = new(big.Int).Exp(generator, secret, factor).Bytes()
-	prependZero := make([]byte, len(factor.Bytes())-len(localPublicValue))
-	localPublicValue = append(prependZero, localPublicValue...)
-
-	sharedKey = new(big.Int).Exp(peerPublicValueBig, secret, factor).Bytes()
-	prependZero = make([]byte, len(factor.Bytes())-len(sharedKey))
-	sharedKey = append(prependZero, sharedKey...)
-
-	return localPublicValue, sharedKey
+	return ikesa.dhInfo.GetPublicValue(secret), ikesa.dhInfo.GetSharedKey(secret, peerPublicValueBig)
 }
 
-// Pseudorandom Funciton
-func NewPseudorandomFunction(key []byte, algorithmType uint16) (hash.Hash, bool) {
-	switch algorithmType {
-	case message.PRF_HMAC_MD5:
-		return hmac.New(md5.New, key), true
-	case message.PRF_HMAC_SHA1:
-		return hmac.New(sha1.New, key), true
-	default:
-		ikeLog.Errorf("Unsupported pseudo random function: %d", algorithmType)
-		return nil, false
+func (ikesa *IKESA) GenerateKey(concatenatedNonce, dhSharedKey []byte) error {
+	// Check parameters
+	if ikesa == nil {
+		return errors.New("IKE SA is nil")
 	}
+
+	// Check if the context contain needed data
+	if ikesa.encrInfo == nil {
+		return errors.New("No encryption algorithm specified")
+	}
+	if ikesa.integInfo == nil {
+		return errors.New("No integrity algorithm specified")
+	}
+	if ikesa.prfInfo == nil {
+		return errors.New("No pseudorandom function specified")
+	}
+	if ikesa.dhInfo == nil {
+		return errors.New("No Diffie-hellman group algorithm specified")
+	}
+
+	if len(concatenatedNonce) == 0 {
+		return errors.New("No concatenated nonce data")
+	}
+	if len(dhSharedKey) == 0 {
+		return errors.New("No Diffie-Hellman shared key")
+	}
+
+	// Get key length of SK_d, SK_ai, SK_ar, SK_ei, SK_er, SK_pi, SK_pr
+	var length_SK_d, length_SK_ai, length_SK_ar, length_SK_ei, length_SK_er, length_SK_pi, length_SK_pr, totalKeyLength int
+
+	length_SK_d = ikesa.prfInfo.GetKeyLength()
+	length_SK_ai = ikesa.integInfo.GetKeyLength()
+	length_SK_ar = length_SK_ai
+	length_SK_ei = ikesa.encrInfo.GetKeyLength()
+	length_SK_er = length_SK_ei
+	length_SK_pi, length_SK_pr = length_SK_d, length_SK_d
+
+	totalKeyLength = length_SK_d + length_SK_ai + length_SK_ar + length_SK_ei + length_SK_er + length_SK_pi + length_SK_pr
+
+	// Generate IKE SA key as defined in RFC7296 Section 1.3 and Section 1.4
+	secLog.Tracef("Concatenated nonce:\n%s", hex.Dump(concatenatedNonce))
+	secLog.Tracef("DH shared key:\n%s", hex.Dump(dhSharedKey))
+
+	prf := ikesa.prfInfo.Init(concatenatedNonce)
+	_, _ = prf.Write(dhSharedKey) // hash.Hash.Write() never return an error
+
+	skeyseed := prf.Sum(nil)
+	seed := concatenateNonceAndSPI(concatenatedNonce, ikesa.RemoteSPI, ikesa.LocalSPI)
+
+	secLog.Tracef("SKEYSEED:\n%s", hex.Dump(skeyseed))
+
+	keyStream := lib.PrfPlus(ikesa.prfInfo.Init(skeyseed), seed, totalKeyLength)
+
+	// Assign keys into context
+	sk_d := keyStream[:length_SK_d]
+	keyStream = keyStream[length_SK_d:]
+	sk_ai := keyStream[:length_SK_ai]
+	keyStream = keyStream[length_SK_ai:]
+	sk_ar := keyStream[:length_SK_ar]
+	keyStream = keyStream[length_SK_ar:]
+	sk_ei := keyStream[:length_SK_ei]
+	keyStream = keyStream[length_SK_ei:]
+	sk_er := keyStream[:length_SK_er]
+	keyStream = keyStream[length_SK_er:]
+	sk_pi := keyStream[:length_SK_pi]
+	keyStream = keyStream[length_SK_pi:]
+	sk_pr := keyStream[:length_SK_pr]
+
+	secLog.Tracef("SK_d:\n%s", hex.Dump(sk_d))
+	secLog.Tracef("SK_ai:\n%s", hex.Dump(sk_ai))
+	secLog.Tracef("SK_ar:\n%s", hex.Dump(sk_ar))
+	secLog.Tracef("SK_ei:\n%s", hex.Dump(sk_ei))
+	secLog.Tracef("SK_er:\n%s", hex.Dump(sk_er))
+	secLog.Tracef("SK_pi:\n%s", hex.Dump(sk_pi))
+	secLog.Tracef("SK_pr:\n%s", hex.Dump(sk_pr))
+
+	// Set security objects
+	ikesa.Prf_d = ikesa.prfInfo.Init(sk_d)
+	ikesa.Integ_i = ikesa.integInfo.Init(sk_ai)
+	ikesa.Integ_r = ikesa.integInfo.Init(sk_ar)
+	ikesa.Encr_i = ikesa.encrInfo.Init(sk_ei)
+	ikesa.Encr_r = ikesa.encrInfo.Init(sk_er)
+	ikesa.Prf_i = ikesa.prfInfo.Init(sk_pi)
+	ikesa.Prf_r = ikesa.prfInfo.Init(sk_pr)
+
+	return nil
 }
 
-// Integrity Algorithm
-func CalculateChecksum(key []byte, originData []byte, algorithmType uint16) ([]byte, error) {
-	switch algorithmType {
-	case message.AUTH_HMAC_MD5_96:
-		if len(key) != 16 {
-			return nil, errors.New("Unmatched input key length")
-		}
-		integrityFunction := hmac.New(md5.New, key)
-		if _, err := integrityFunction.Write(originData); err != nil {
-			ikeLog.Errorf("Hash function write error when calcualting checksum: %+v", err)
-			return nil, errors.New("Hash function write error")
-		}
-		return integrityFunction.Sum(nil), nil
-	case message.AUTH_HMAC_SHA1_96:
-		if len(key) != 20 {
-			return nil, errors.New("Unmatched input key length")
-		}
-		integrityFunction := hmac.New(sha1.New, key)
-		if _, err := integrityFunction.Write(originData); err != nil {
-			ikeLog.Errorf("Hash function write error when calcualting checksum: %+v", err)
-			return nil, errors.New("Hash function write error")
-		}
-		return integrityFunction.Sum(nil)[:12], nil
-	default:
-		ikeLog.Errorf("Unsupported integrity function: %d", algorithmType)
-		return nil, errors.New("Unsupported algorithm")
+func (ikesa *IKESA) VerifyIKEChecksum(role int, data []byte) bool {
+	checksumLen := ikesa.integInfo.GetOutputLength()
+	if len(data) <= checksumLen {
+		return false
 	}
+
+	checkedData := data[:len(data)-checksumLen]
+	checksum := data[len(data)-checksumLen:]
+
+	// Calculate
+	var calculatedChecksum []byte
+	if role == types.Role_Initiator {
+		ikesa.Integ_i.Reset()
+		_, _ = ikesa.Integ_i.Write(checkedData) // hash.Hash.Write() never return an error
+		calculatedChecksum = ikesa.Integ_i.Sum(nil)
+	} else {
+		ikesa.Integ_r.Reset()
+		_, _ = ikesa.Integ_r.Write(checkedData) // hash.Hash.Write() never return an error
+		calculatedChecksum = ikesa.Integ_r.Sum(nil)
+	}
+
+	return hmac.Equal(checksum, calculatedChecksum)
 }
 
+func (ikesa *IKESA) CalcIKEChecksum(role int, data []byte) error {
+	checksumLen := ikesa.integInfo.GetOutputLength()
+	if len(data) <= checksumLen {
+		return errors.New("Input data too short")
+	}
+
+	checkedData := data[:len(data)-checksumLen]
+	checksum := data[len(data)-checksumLen:]
+
+	// Calculate
+	var calculatedChecksum []byte
+	if role == types.Role_Initiator {
+		ikesa.Integ_i.Reset()
+		_, _ = ikesa.Integ_i.Write(checkedData) // hash.Hash.Write() never return an error
+		calculatedChecksum = ikesa.Integ_i.Sum(nil)
+	} else {
+		ikesa.Integ_r.Reset()
+		_, _ = ikesa.Integ_r.Write(checkedData) // hash.Hash.Write() never return an error
+		calculatedChecksum = ikesa.Integ_r.Sum(nil)
+	}
+
+	copy(checksum, calculatedChecksum)
+
+	return nil
+}
+
+func (ikesa *IKESA) EncryptToSKPayload(role int, data []byte) ([]byte, error) {
+	// Encrypt
+	var cipherText []byte
+	if role == types.Role_Initiator {
+		var err error
+		if cipherText, err = ikesa.Encr_i.Encrypt(data); err != nil {
+			secLog.Errorf("Encrypt() failed: %+v", err)
+			return nil, errors.New("Failed to encrypt to SK")
+		}
+	} else {
+		var err error
+		if cipherText, err = ikesa.Encr_r.Encrypt(data); err != nil {
+			secLog.Errorf("Encrypt() failed: %+v", err)
+			return nil, errors.New("Failed to encrypt to SK")
+		}
+	}
+
+	// Append checksum field
+	checksumField := make([]byte, ikesa.integInfo.GetOutputLength())
+	cipherText = append(cipherText, checksumField...)
+
+	return cipherText, nil
+}
+
+func (ikesa *IKESA) DecryptSKPayload(role int, data []byte) ([]byte, error) {
+	// Delete checksum field
+	checksumLen := ikesa.integInfo.GetOutputLength()
+	data = data[:len(data)-checksumLen]
+
+	// Decrypt
+	var plainText []byte
+	if role == types.Role_Initiator {
+		var err error
+		if plainText, err = ikesa.Encr_i.Decrypt(data); err != nil {
+			secLog.Errorf("Decrypt() failed: %+v", err)
+			return nil, errors.New("Failed to decrypt SK")
+		}
+	} else {
+		var err error
+		if plainText, err = ikesa.Encr_r.Decrypt(data); err != nil {
+			secLog.Errorf("Decrypt() failed: %+v", err)
+			return nil, errors.New("Failed to decrypt SK")
+		}
+	}
+
+	return plainText, nil
+}
+
+type ChildSA struct {
+	// SPI
+	SPI uint32
+
+	// Child SA transform types
+	dhInfo     dh.DHType
+	encrKInfo  encr.ENCRKType
+	integKInfo integ.INTEGKType
+	esnInfo    esn.ESNType
+
+	// Mark
+	Mark uint32
+
+	// IP addresses
+	RemotePublicIPAddr net.IP
+	LocalPublicIPAddr  net.IP
+
+	// Traffic
+	IPProto  uint8
+	TSLocal  *net.IPNet
+	TSRemote *net.IPNet
+
+	// Security
+	initiatorToResponderEncrKey  []byte
+	responderToInitiatorEncrKey  []byte
+	initiatorToResponderIntegKey []byte
+	responderToInitiatorIntegKey []byte
+
+	// Encapsulate
+	EnableEncap bool
+	LocalPort   int
+	RemotePort  int
+
+	// XFRM contexts
+	initiatorToResponderPolicy *netlink.XfrmPolicy
+	initiatorToResponderState  *netlink.XfrmState
+	responderToInitiatorPolicy *netlink.XfrmPolicy
+	responderToInitiatorState  *netlink.XfrmState
+}
+
+func (childsa *ChildSA) SelectProposal(proposal *message.Proposal) bool {
+	// DH is optional
+	for _, transform := range proposal.DiffieHellmanGroup {
+		dhType := dh.DecodeTransform(transform)
+		if dhType != nil {
+			if childsa.dhInfo == nil {
+				childsa.dhInfo = dhType
+			} else {
+				if dhType.Priority() > childsa.dhInfo.Priority() {
+					childsa.dhInfo = dhType
+				}
+			}
+		}
+	}
+	for _, transform := range proposal.EncryptionAlgorithm {
+		encrKType := encr.DecodeTransformChildSA(transform)
+		if encrKType != nil {
+			if childsa.encrKInfo == nil {
+				childsa.encrKInfo = encrKType
+			} else {
+				if encrKType.Priority() > childsa.encrKInfo.Priority() {
+					childsa.encrKInfo = encrKType
+				}
+			}
+		}
+	}
+	if childsa.encrKInfo == nil {
+		return false // mandatory
+	}
+	// Integ is optional
+	for _, transform := range proposal.IntegrityAlgorithm {
+		integKType := integ.DecodeTransformChildSA(transform)
+		if integKType != nil {
+			if childsa.integKInfo == nil {
+				childsa.integKInfo = integKType
+			} else {
+				if integKType.Priority() > childsa.integKInfo.Priority() {
+					childsa.integKInfo = integKType
+				}
+			}
+		}
+	}
+	for _, transform := range proposal.ExtendedSequenceNumbers {
+		esnType := esn.DecodeTransform(transform)
+		if esnType != nil {
+			if childsa.esnInfo == nil {
+				childsa.esnInfo = esnType
+			} else {
+				if esnType.Priority() > childsa.esnInfo.Priority() {
+					childsa.esnInfo = esnType
+				}
+			}
+		}
+	}
+	if childsa.esnInfo == nil {
+		return false // mandatory
+	}
+	if len(proposal.PseudorandomFunction) > 0 {
+		return false // No PRF
+	}
+	return true
+}
+
+func (childsa *ChildSA) ToProposal() *message.Proposal {
+	p := new(message.Proposal)
+	p.ProtocolID = types.TypeESP
+	if childsa.dhInfo != nil {
+		p.DiffieHellmanGroup = append(p.DiffieHellmanGroup, dh.ToTransform(childsa.dhInfo))
+	}
+	p.EncryptionAlgorithm = append(p.EncryptionAlgorithm, encr.ToTransformChildSA(childsa.encrKInfo))
+	if childsa.integKInfo != nil {
+		p.IntegrityAlgorithm = append(p.IntegrityAlgorithm, integ.ToTransformChildSA(childsa.integKInfo))
+	}
+	p.ExtendedSequenceNumbers = append(p.ExtendedSequenceNumbers, esn.ToTransform(childsa.esnInfo))
+	return p
+}
+
+func (childsa *ChildSA) SetProposal(proposal *message.Proposal) bool {
+	if len(proposal.DiffieHellmanGroup) == 1 {
+		if childsa.dhInfo = dh.DecodeTransform(proposal.DiffieHellmanGroup[0]); childsa.dhInfo == nil {
+			return false
+		}
+	}
+	if childsa.encrKInfo = encr.DecodeTransformChildSA(proposal.EncryptionAlgorithm[0]); childsa.encrKInfo == nil {
+		return false
+	}
+	if len(proposal.IntegrityAlgorithm) == 1 {
+		if childsa.integKInfo = integ.DecodeTransformChildSA(proposal.IntegrityAlgorithm[0]); childsa.encrKInfo == nil {
+			return false
+		}
+	}
+	if childsa.esnInfo = esn.DecodeTransform(proposal.ExtendedSequenceNumbers[0]); childsa.esnInfo == nil {
+		return false
+	}
+	return true
+}
+
+// CalcKEMaterial generates secret and calculate Diffie-Hellman public key
+// exchange material.
+// Peer public value as parameter, return local public value and shared key.
+func (childsa *ChildSA) CalcKEMaterial(peerPublicValue []byte) ([]byte, []byte) {
+	secret := GenerateRandomNumber()
+	peerPublicValueBig := new(big.Int).SetBytes(peerPublicValue)
+	return childsa.dhInfo.GetPublicValue(secret), childsa.dhInfo.GetSharedKey(secret, peerPublicValueBig)
+}
+
+// Key Gen for child SA
+func (childsa *ChildSA) GenerateKey(prf hash.Hash, dhSharedKey, concatenatedNonce []byte) error {
+	// Check parameters
+	if childsa == nil {
+		return errors.New("Child SA is nil")
+	}
+
+	// Check if the context contain needed data
+	if prf == nil {
+		return errors.New("No pseudorandom function specified")
+	}
+	if childsa.encrKInfo == nil {
+		return errors.New("No encryption algorithm specified")
+	}
+	if childsa.esnInfo == nil {
+		return errors.New("No ESN present specified")
+	}
+
+	// Get key length for encryption and integrity key for IPSec
+	var lengthEncrKeyIPSec, lengthIntegKeyIPSec, totalKeyLength int
+
+	lengthEncrKeyIPSec = childsa.encrKInfo.GetKeyLength()
+	if childsa.integKInfo != nil {
+		lengthIntegKeyIPSec = childsa.integKInfo.GetKeyLength()
+	}
+	totalKeyLength = (lengthEncrKeyIPSec + lengthIntegKeyIPSec) * 2
+
+	// Generate key for child security association as specified in RFC 7296 section 2.17
+	var seed []byte
+	if childsa.dhInfo != nil && dhSharedKey != nil {
+		seed = append(dhSharedKey, concatenatedNonce...)
+	} else {
+		seed = concatenatedNonce
+	}
+
+	keyStream := lib.PrfPlus(prf, seed, totalKeyLength)
+
+	childsa.initiatorToResponderEncrKey =
+		append(childsa.initiatorToResponderEncrKey, keyStream[:lengthEncrKeyIPSec]...)
+	keyStream = keyStream[lengthEncrKeyIPSec:]
+	if childsa.integKInfo != nil {
+		childsa.initiatorToResponderIntegKey =
+			append(childsa.initiatorToResponderIntegKey, keyStream[:lengthIntegKeyIPSec]...)
+		keyStream = keyStream[lengthIntegKeyIPSec:]
+	}
+	childsa.responderToInitiatorEncrKey =
+		append(childsa.responderToInitiatorEncrKey, keyStream[:lengthEncrKeyIPSec]...)
+	keyStream = keyStream[lengthEncrKeyIPSec:]
+	if childsa.integKInfo != nil {
+		childsa.responderToInitiatorIntegKey =
+			append(childsa.responderToInitiatorIntegKey, keyStream[:lengthIntegKeyIPSec]...)
+	}
+
+	return nil
+
+}
+
+func (childsa *ChildSA) GenerateXFRMContext(role int) {
+	// Mark
+	mark := &netlink.XfrmMark{
+		Value: childsa.Mark,
+	}
+
+	// Initiator to responder state and policy
+	// State
+	s := new(netlink.XfrmState)
+	if role == types.Role_Initiator {
+		s.Src = childsa.LocalPublicIPAddr
+		s.Dst = childsa.RemotePublicIPAddr
+	} else {
+		s.Src = childsa.RemotePublicIPAddr
+		s.Dst = childsa.LocalPublicIPAddr
+	}
+	s.Proto = netlink.XFRM_PROTO_ESP
+	s.Mode = netlink.XFRM_MODE_TUNNEL
+	s.Spi = int(childsa.SPI)
+	s.Mark = mark
+	if childsa.integKInfo != nil {
+		s.Auth = &netlink.XfrmStateAlgo{
+			Name: childsa.integKInfo.XFRMString(),
+			Key:  childsa.initiatorToResponderIntegKey,
+		}
+	}
+	s.Crypt = &netlink.XfrmStateAlgo{
+		Name: childsa.encrKInfo.XFRMString(),
+		Key:  childsa.initiatorToResponderEncrKey,
+	}
+	s.ESN = childsa.esnInfo.Init()
+	if childsa.EnableEncap {
+		if role == types.Role_Initiator {
+			s.Encap = &netlink.XfrmStateEncap{
+				Type:    netlink.XFRM_ENCAP_ESPINUDP,
+				SrcPort: childsa.LocalPort,
+				DstPort: childsa.RemotePort,
+			}
+		} else {
+			s.Encap = &netlink.XfrmStateEncap{
+				Type:    netlink.XFRM_ENCAP_ESPINUDP,
+				SrcPort: childsa.RemotePort,
+				DstPort: childsa.LocalPort,
+			}
+		}
+	}
+
+	// Policy
+	p := new(netlink.XfrmPolicy)
+	if role == types.Role_Initiator {
+		p.Src = childsa.TSLocal
+		p.Dst = childsa.TSRemote
+		p.Dir = netlink.XFRM_DIR_OUT
+	} else {
+		p.Src = childsa.TSRemote
+		p.Dst = childsa.TSLocal
+		p.Dir = netlink.XFRM_DIR_IN
+	}
+	p.Proto = netlink.Proto(childsa.IPProto)
+	p.Mark = mark
+	p.Tmpls = []netlink.XfrmPolicyTmpl{
+		{
+			Src:   s.Src,
+			Dst:   s.Dst,
+			Proto: s.Proto,
+			Mode:  s.Mode,
+			Spi:   s.Spi,
+		},
+	}
+
+	childsa.initiatorToResponderState = s
+	childsa.initiatorToResponderPolicy = p
+
+	// Responder to initiator state and policy
+	// State
+	s = new(netlink.XfrmState)
+	if role == types.Role_Initiator {
+		s.Src = childsa.RemotePublicIPAddr
+		s.Dst = childsa.LocalPublicIPAddr
+	} else {
+		s.Src = childsa.LocalPublicIPAddr
+		s.Dst = childsa.RemotePublicIPAddr
+	}
+	s.Proto = netlink.XFRM_PROTO_ESP
+	s.Mode = netlink.XFRM_MODE_TUNNEL
+	s.Spi = int(childsa.SPI)
+	s.Mark = mark
+	if childsa.integKInfo != nil {
+		s.Auth = &netlink.XfrmStateAlgo{
+			Name: childsa.integKInfo.XFRMString(),
+			Key:  childsa.responderToInitiatorIntegKey,
+		}
+	}
+	s.Crypt = &netlink.XfrmStateAlgo{
+		Name: childsa.encrKInfo.XFRMString(),
+		Key:  childsa.responderToInitiatorEncrKey,
+	}
+	s.ESN = childsa.esnInfo.Init()
+	if childsa.EnableEncap {
+		if role == types.Role_Initiator {
+			s.Encap = &netlink.XfrmStateEncap{
+				Type:    netlink.XFRM_ENCAP_ESPINUDP,
+				SrcPort: childsa.RemotePort,
+				DstPort: childsa.LocalPort,
+			}
+		} else {
+			s.Encap = &netlink.XfrmStateEncap{
+				Type:    netlink.XFRM_ENCAP_ESPINUDP,
+				SrcPort: childsa.LocalPort,
+				DstPort: childsa.RemotePort,
+			}
+		}
+	}
+
+	// Policy
+	p = new(netlink.XfrmPolicy)
+	if role == types.Role_Initiator {
+		p.Src = childsa.TSRemote
+		p.Dst = childsa.TSLocal
+		p.Dir = netlink.XFRM_DIR_IN
+	} else {
+		p.Src = childsa.TSLocal
+		p.Dst = childsa.TSRemote
+		p.Dir = netlink.XFRM_DIR_OUT
+	}
+	p.Proto = netlink.Proto(childsa.IPProto)
+	p.Mark = mark
+	p.Tmpls = []netlink.XfrmPolicyTmpl{
+		{
+			Src:   s.Src,
+			Dst:   s.Dst,
+			Proto: s.Proto,
+			Mode:  s.Mode,
+			Spi:   s.Spi,
+		},
+	}
+
+	childsa.responderToInitiatorState = s
+	childsa.responderToInitiatorPolicy = p
+}
+
+func (childsa *ChildSA) XFRMRuleAdd() error {
+	if err := netlink.XfrmStateAdd(childsa.initiatorToResponderState); err != nil {
+		secLog.Errorf("Add XFRM state failed: %+v", err)
+		return errors.New("Add XFRM initiator to responder state failed")
+	}
+	if err := netlink.XfrmPolicyAdd(childsa.initiatorToResponderPolicy); err != nil {
+		secLog.Errorf("Add XFRM policy failed: %+v", err)
+		return errors.New("Add XFRM initiator to responder policy failed")
+	}
+	if err := netlink.XfrmStateAdd(childsa.responderToInitiatorState); err != nil {
+		secLog.Errorf("Add XFRM state failed: %+v", err)
+		return errors.New("Add XFRM responder to initiator state failed")
+	}
+	if err := netlink.XfrmPolicyAdd(childsa.responderToInitiatorPolicy); err != nil {
+		secLog.Errorf("Add XFRM policy failed: %+v", err)
+		return errors.New("Add XFRM responder to initiator policy failed")
+	}
+	return nil
+}
+
+func (childsa *ChildSA) XFRMRuleFlush() error {
+	if err := netlink.XfrmStateDel(childsa.initiatorToResponderState); err != nil {
+		secLog.Errorf("Delete XFRM state failed: %+v", err)
+		return errors.New("Delete XFRM initiator to responder state failed")
+	}
+	if err := netlink.XfrmPolicyDel(childsa.initiatorToResponderPolicy); err != nil {
+		secLog.Errorf("Delete XFRM policy failed: %+v", err)
+		return errors.New("Delete XFRM initiator to responder policy failed")
+	}
+	if err := netlink.XfrmStateDel(childsa.responderToInitiatorState); err != nil {
+		secLog.Errorf("Delete XFRM state failed: %+v", err)
+		return errors.New("Delete XFRM responder to initiator state failed")
+	}
+	if err := netlink.XfrmPolicyDel(childsa.responderToInitiatorPolicy); err != nil {
+		secLog.Errorf("Delete XFRM policy failed: %+v", err)
+		return errors.New("Delete XFRM responder to initiator policy failed")
+	}
+	return nil
+}
+
+/* Archive for future use
+// Certificate
+func CompareRootCertificate(certificateEncoding uint8, requestedCertificateAuthorityHash []byte) bool {
+	if certificateEncoding != types.X509CertificateSignature {
+		secLog.Debugf("Not support certificate type: %d. Reject.", certificateEncoding)
+		return false
+	}
+
+	n3iwfSelf := context.N3IWFSelf()
+
+	if len(n3iwfSelf.CertificateAuthority) == 0 {
+		secLog.Error("Certificate authority in context is empty")
+		return false
+	}
+
+	return bytes.Equal(n3iwfSelf.CertificateAuthority, requestedCertificateAuthorityHash)
+}
+*/
+
+/*
 func VerifyIKEChecksum(key []byte, originData []byte, checksum []byte, algorithmType uint16) (bool, error) {
 	switch algorithmType {
 	case message.AUTH_HMAC_MD5_96:
@@ -176,12 +801,12 @@ func VerifyIKEChecksum(key []byte, originData []byte, checksum []byte, algorithm
 		}
 		integrityFunction := hmac.New(md5.New, key)
 		if _, err := integrityFunction.Write(originData); err != nil {
-			ikeLog.Errorf("Hash function write error when verifying IKE checksum: %+v", err)
+			secLog.Errorf("Hash function write error when verifying IKE checksum: %+v", err)
 			return false, errors.New("Hash function write error")
 		}
 		checksumOfMessage := integrityFunction.Sum(nil)
 
-		ikeLog.Tracef("Calculated checksum:\n%s\nReceived checksum:\n%s",
+		secLog.Tracef("Calculated checksum:\n%s\nReceived checksum:\n%s",
 			hex.Dump(checksumOfMessage), hex.Dump(checksum))
 
 		return hmac.Equal(checksumOfMessage, checksum), nil
@@ -191,343 +816,19 @@ func VerifyIKEChecksum(key []byte, originData []byte, checksum []byte, algorithm
 		}
 		integrityFunction := hmac.New(sha1.New, key)
 		if _, err := integrityFunction.Write(originData); err != nil {
-			ikeLog.Errorf("Hash function write error when verifying IKE checksum: %+v", err)
+			secLog.Errorf("Hash function write error when verifying IKE checksum: %+v", err)
 			return false, errors.New("Hash function write error")
 		}
 		checksumOfMessage := integrityFunction.Sum(nil)[:12]
 
-		ikeLog.Tracef("Calculated checksum:\n%s\nReceived checksum:\n%s",
+		secLog.Tracef("Calculated checksum:\n%s\nReceived checksum:\n%s",
 			hex.Dump(checksumOfMessage), hex.Dump(checksum))
 
 		return hmac.Equal(checksumOfMessage, checksum), nil
 	default:
-		ikeLog.Errorf("Unsupported integrity function: %d", algorithmType)
+		secLog.Errorf("Unsupported integrity function: %d", algorithmType)
 		return false, errors.New("Unsupported algorithm")
 	}
-}
-
-// Encryption Algorithm
-func EncryptMessage(key []byte, originData []byte, algorithmType uint16) ([]byte, error) {
-	switch algorithmType {
-	case message.ENCR_AES_CBC:
-		// padding message
-		originData = PKCS7Padding(originData, aes.BlockSize)
-		originData[len(originData)-1]--
-
-		block, err := aes.NewCipher(key)
-		if err != nil {
-			ikeLog.Errorf("Error occur when create new cipher: %+v", err)
-			return nil, errors.New("Create cipher failed")
-		}
-
-		cipherText := make([]byte, aes.BlockSize+len(originData))
-		initializationVector := cipherText[:aes.BlockSize]
-
-		_, err = io.ReadFull(rand.Reader, initializationVector)
-		if err != nil {
-			ikeLog.Errorf("Read random failed: %+v", err)
-			return nil, errors.New("Read random initialization vector failed")
-		}
-
-		cbcBlockMode := cipher.NewCBCEncrypter(block, initializationVector)
-		cbcBlockMode.CryptBlocks(cipherText[aes.BlockSize:], originData)
-
-		return cipherText, nil
-	default:
-		ikeLog.Errorf("Unsupported encryption algorithm: %d", algorithmType)
-		return nil, errors.New("Unsupported algorithm")
-	}
-}
-
-func DecryptMessage(key []byte, cipherText []byte, algorithmType uint16) ([]byte, error) {
-	switch algorithmType {
-	case message.ENCR_AES_CBC:
-		if len(cipherText) < aes.BlockSize {
-			ikeLog.Error("Length of cipher text is too short to decrypt")
-			return nil, errors.New("Cipher text is too short")
-		}
-
-		initializationVector := cipherText[:aes.BlockSize]
-		encryptedMessage := cipherText[aes.BlockSize:]
-
-		if len(encryptedMessage)%aes.BlockSize != 0 {
-			ikeLog.Error("Cipher text is not a multiple of block size")
-			return nil, errors.New("Cipher text length error")
-		}
-
-		plainText := make([]byte, len(encryptedMessage))
-
-		block, err := aes.NewCipher(key)
-		if err != nil {
-			ikeLog.Errorf("Error occur when create new cipher: %+v", err)
-			return nil, errors.New("Create cipher failed")
-		}
-		cbcBlockMode := cipher.NewCBCDecrypter(block, initializationVector)
-		cbcBlockMode.CryptBlocks(plainText, encryptedMessage)
-
-		ikeLog.Tracef("Decrypted content:\n%s", hex.Dump(plainText))
-
-		padding := int(plainText[len(plainText)-1]) + 1
-		plainText = plainText[:len(plainText)-padding]
-
-		ikeLog.Tracef("Decrypted content with out padding:\n%s", hex.Dump(plainText))
-
-		return plainText, nil
-	default:
-		ikeLog.Errorf("Unsupported encryption algorithm: %d", algorithmType)
-		return nil, errors.New("Unsupported algorithm")
-	}
-}
-
-func PKCS7Padding(plainText []byte, blockSize int) []byte {
-	padding := blockSize - (len(plainText) % blockSize)
-	if padding == 0 {
-		padding = blockSize
-	}
-	paddingText := bytes.Repeat([]byte{byte(padding)}, padding)
-	return append(plainText, paddingText...)
-}
-
-// Certificate
-func CompareRootCertificate(certificateEncoding uint8, requestedCertificateAuthorityHash []byte) bool {
-	if certificateEncoding != message.X509CertificateSignature {
-		ikeLog.Debugf("Not support certificate type: %d. Reject.", certificateEncoding)
-		return false
-	}
-
-	n3iwfSelf := context.N3IWFSelf()
-
-	if len(n3iwfSelf.CertificateAuthority) == 0 {
-		ikeLog.Error("Certificate authority in context is empty")
-		return false
-	}
-
-	return bytes.Equal(n3iwfSelf.CertificateAuthority, requestedCertificateAuthorityHash)
-}
-
-// Key Gen for IKE SA
-func GenerateKeyForIKESA(ikeSecurityAssociation *context.IKESecurityAssociation) error {
-	// Check parameters
-	if ikeSecurityAssociation == nil {
-		return errors.New("IKE SA is nil")
-	}
-
-	// Check if the context contain needed data
-	if ikeSecurityAssociation.EncryptionAlgorithm == nil {
-		return errors.New("No encryption algorithm specified")
-	}
-	if ikeSecurityAssociation.IntegrityAlgorithm == nil {
-		return errors.New("No integrity algorithm specified")
-	}
-	if ikeSecurityAssociation.PseudorandomFunction == nil {
-		return errors.New("No pseudorandom function specified")
-	}
-	if ikeSecurityAssociation.DiffieHellmanGroup == nil {
-		return errors.New("No Diffie-hellman group algorithm specified")
-	}
-
-	if len(ikeSecurityAssociation.ConcatenatedNonce) == 0 {
-		return errors.New("No concatenated nonce data")
-	}
-	if len(ikeSecurityAssociation.DiffieHellmanSharedKey) == 0 {
-		return errors.New("No Diffie-Hellman shared key")
-	}
-
-	// Transforms
-	transformIntegrityAlgorithm := ikeSecurityAssociation.IntegrityAlgorithm
-	transformEncryptionAlgorithm := ikeSecurityAssociation.EncryptionAlgorithm
-	transformPseudorandomFunction := ikeSecurityAssociation.PseudorandomFunction
-
-	// Get key length of SK_d, SK_ai, SK_ar, SK_ei, SK_er, SK_pi, SK_pr
-	var length_SK_d, length_SK_ai, length_SK_ar, length_SK_ei, length_SK_er, length_SK_pi, length_SK_pr, totalKeyLength int
-	var ok bool
-
-	if length_SK_d, ok = getKeyLength(transformPseudorandomFunction.TransformType,
-		transformPseudorandomFunction.TransformID, transformPseudorandomFunction.AttributePresent,
-		transformPseudorandomFunction.AttributeValue); !ok {
-		ikeLog.Error("Get key length of an unsupported algorithm. This may imply an unsupported tranform is chosen.")
-		return errors.New("Get key length failed")
-	}
-	if length_SK_ai, ok = getKeyLength(transformIntegrityAlgorithm.TransformType,
-		transformIntegrityAlgorithm.TransformID, transformIntegrityAlgorithm.AttributePresent,
-		transformIntegrityAlgorithm.AttributeValue); !ok {
-		ikeLog.Error("Get key length of an unsupported algorithm. This may imply an unsupported tranform is chosen.")
-		return errors.New("Get key length failed")
-	}
-	length_SK_ar = length_SK_ai
-	if length_SK_ei, ok = getKeyLength(transformEncryptionAlgorithm.TransformType,
-		transformEncryptionAlgorithm.TransformID, transformEncryptionAlgorithm.AttributePresent,
-		transformEncryptionAlgorithm.AttributeValue); !ok {
-		ikeLog.Error("Get key length of an unsupported algorithm. This may imply an unsupported tranform is chosen.")
-		return errors.New("Get key length failed")
-	}
-	length_SK_er = length_SK_ei
-	length_SK_pi, length_SK_pr = length_SK_d, length_SK_d
-	totalKeyLength = length_SK_d + length_SK_ai + length_SK_ar + length_SK_ei + length_SK_er + length_SK_pi + length_SK_pr
-
-	// Generate IKE SA key as defined in RFC7296 Section 1.3 and Section 1.4
-	var pseudorandomFunction hash.Hash
-
-	if pseudorandomFunction, ok = NewPseudorandomFunction(ikeSecurityAssociation.ConcatenatedNonce,
-		transformPseudorandomFunction.TransformID); !ok {
-		ikeLog.Error("Get an unsupported pseudorandom funcion. This may imply an unsupported transform is chosen.")
-		return errors.New("New pseudorandom function failed")
-	}
-
-	ikeLog.Tracef("DH shared key:\n%s", hex.Dump(ikeSecurityAssociation.DiffieHellmanSharedKey))
-	ikeLog.Tracef("Concatenated nonce:\n%s", hex.Dump(ikeSecurityAssociation.ConcatenatedNonce))
-
-	if _, err := pseudorandomFunction.Write(ikeSecurityAssociation.DiffieHellmanSharedKey); err != nil {
-		ikeLog.Errorf("Pseudorandom function write error: %+v", err)
-		return errors.New("Pseudorandom function write failed")
-	}
-
-	SKEYSEED := pseudorandomFunction.Sum(nil)
-
-	ikeLog.Tracef("SKEYSEED:\n%s", hex.Dump(SKEYSEED))
-
-	seed := concatenateNonceAndSPI(ikeSecurityAssociation.ConcatenatedNonce,
-		ikeSecurityAssociation.RemoteSPI, ikeSecurityAssociation.LocalSPI)
-
-	var keyStream, generatedKeyBlock []byte
-	var index byte
-	for index = 1; len(keyStream) < totalKeyLength; index++ {
-		if pseudorandomFunction, ok =
-			NewPseudorandomFunction(SKEYSEED, transformPseudorandomFunction.TransformID); !ok {
-			ikeLog.Error("Get an unsupported pseudorandom funcion. This may imply an unsupported transform is chosen.")
-			return errors.New("New pseudorandom function failed")
-		}
-		if _, err := pseudorandomFunction.Write(append(append(generatedKeyBlock, seed...), index)); err != nil {
-			ikeLog.Errorf("Pseudorandom function write error: %+v", err)
-			return errors.New("Pseudorandom function write failed")
-		}
-		generatedKeyBlock = pseudorandomFunction.Sum(nil)
-		keyStream = append(keyStream, generatedKeyBlock...)
-	}
-
-	// Assign keys into context
-	ikeSecurityAssociation.SK_d = keyStream[:length_SK_d]
-	keyStream = keyStream[length_SK_d:]
-	ikeSecurityAssociation.SK_ai = keyStream[:length_SK_ai]
-	keyStream = keyStream[length_SK_ai:]
-	ikeSecurityAssociation.SK_ar = keyStream[:length_SK_ar]
-	keyStream = keyStream[length_SK_ar:]
-	ikeSecurityAssociation.SK_ei = keyStream[:length_SK_ei]
-	keyStream = keyStream[length_SK_ei:]
-	ikeSecurityAssociation.SK_er = keyStream[:length_SK_er]
-	keyStream = keyStream[length_SK_er:]
-	ikeSecurityAssociation.SK_pi = keyStream[:length_SK_pi]
-	keyStream = keyStream[length_SK_pi:]
-	ikeSecurityAssociation.SK_pr = keyStream[:length_SK_pr]
-	// keyStream = keyStream[length_SK_pr:]
-
-	ikeLog.Tracef("SK_d:\n%s", hex.Dump(ikeSecurityAssociation.SK_d))
-	ikeLog.Tracef("SK_ai:\n%s", hex.Dump(ikeSecurityAssociation.SK_ai))
-	ikeLog.Tracef("SK_ar:\n%s", hex.Dump(ikeSecurityAssociation.SK_ar))
-	ikeLog.Tracef("SK_ei:\n%s", hex.Dump(ikeSecurityAssociation.SK_ei))
-	ikeLog.Tracef("SK_er:\n%s", hex.Dump(ikeSecurityAssociation.SK_er))
-	ikeLog.Tracef("SK_pi:\n%s", hex.Dump(ikeSecurityAssociation.SK_pi))
-	ikeLog.Tracef("SK_pr:\n%s", hex.Dump(ikeSecurityAssociation.SK_pr))
-
-	return nil
-}
-
-// Key Gen for child SA
-func GenerateKeyForChildSA(ikeSecurityAssociation *context.IKESecurityAssociation,
-	childSecurityAssociation *context.ChildSecurityAssociation) error {
-	// Check parameters
-	if ikeSecurityAssociation == nil {
-		return errors.New("IKE SA is nil")
-	}
-	if childSecurityAssociation == nil {
-		return errors.New("Child SA is nil")
-	}
-
-	// Check if the context contain needed data
-	if ikeSecurityAssociation.PseudorandomFunction == nil {
-		return errors.New("No pseudorandom function specified")
-	}
-	if ikeSecurityAssociation.IKEAuthResponseSA == nil {
-		return errors.New("No IKE_AUTH response SA specified")
-	}
-	if len(ikeSecurityAssociation.IKEAuthResponseSA.Proposals) == 0 {
-		return errors.New("No proposal in IKE_AUTH response SA")
-	}
-	if len(ikeSecurityAssociation.IKEAuthResponseSA.Proposals[0].EncryptionAlgorithm) == 0 {
-		return errors.New("No encryption algorithm specified")
-	}
-
-	if len(ikeSecurityAssociation.SK_d) == 0 {
-		return errors.New("No key deriving key")
-	}
-
-	// Transforms
-	transformPseudorandomFunction := ikeSecurityAssociation.PseudorandomFunction
-	transformEncryptionAlgorithmForIPSec :=
-		ikeSecurityAssociation.IKEAuthResponseSA.Proposals[0].EncryptionAlgorithm[0]
-	var transformIntegrityAlgorithmForIPSec *message.Transform
-	if len(ikeSecurityAssociation.IKEAuthResponseSA.Proposals[0].IntegrityAlgorithm) != 0 {
-		transformIntegrityAlgorithmForIPSec =
-			ikeSecurityAssociation.IKEAuthResponseSA.Proposals[0].IntegrityAlgorithm[0]
-	}
-
-	// Get key length for encryption and integrity key for IPSec
-	var lengthEncryptionKeyIPSec, lengthIntegrityKeyIPSec, totalKeyLength int
-	var ok bool
-
-	if lengthEncryptionKeyIPSec, ok = getKeyLength(transformEncryptionAlgorithmForIPSec.TransformType,
-		transformEncryptionAlgorithmForIPSec.TransformID,
-		transformEncryptionAlgorithmForIPSec.AttributePresent,
-		transformEncryptionAlgorithmForIPSec.AttributeValue); !ok {
-		ikeLog.Error("Get key length of an unsupported algorithm. This may imply an unsupported tranform is chosen.")
-		return errors.New("Get key length failed")
-	}
-	if transformIntegrityAlgorithmForIPSec != nil {
-		if lengthIntegrityKeyIPSec, ok = getKeyLength(transformIntegrityAlgorithmForIPSec.TransformType,
-			transformIntegrityAlgorithmForIPSec.TransformID,
-			transformIntegrityAlgorithmForIPSec.AttributePresent,
-			transformIntegrityAlgorithmForIPSec.AttributeValue); !ok {
-			ikeLog.Error("Get key length of an unsupported algorithm. This may imply an unsupported tranform is chosen.")
-			return errors.New("Get key length failed")
-		}
-	}
-	totalKeyLength = lengthEncryptionKeyIPSec + lengthIntegrityKeyIPSec
-	totalKeyLength = totalKeyLength * 2
-
-	// Generate key for child security association as specified in RFC 7296 section 2.17
-	seed := ikeSecurityAssociation.ConcatenatedNonce
-	var pseudorandomFunction hash.Hash
-
-	var keyStream, generatedKeyBlock []byte
-	var index byte
-	for index = 1; len(keyStream) < totalKeyLength; index++ {
-		if pseudorandomFunction, ok = NewPseudorandomFunction(ikeSecurityAssociation.SK_d,
-			transformPseudorandomFunction.TransformID); !ok {
-			ikeLog.Error("Get an unsupported pseudorandom funcion. This may imply an unsupported transform is chosen.")
-			return errors.New("New pseudorandom function failed")
-		}
-		if _, err := pseudorandomFunction.Write(append(append(generatedKeyBlock, seed...), index)); err != nil {
-			ikeLog.Errorf("Pseudorandom function write error: %+v", err)
-			return errors.New("Pseudorandom function write failed")
-		}
-		generatedKeyBlock = pseudorandomFunction.Sum(nil)
-		keyStream = append(keyStream, generatedKeyBlock...)
-	}
-
-	childSecurityAssociation.InitiatorToResponderEncryptionKey =
-		append(childSecurityAssociation.InitiatorToResponderEncryptionKey, keyStream[:lengthEncryptionKeyIPSec]...)
-	keyStream = keyStream[lengthEncryptionKeyIPSec:]
-	childSecurityAssociation.InitiatorToResponderIntegrityKey =
-		append(childSecurityAssociation.InitiatorToResponderIntegrityKey, keyStream[:lengthIntegrityKeyIPSec]...)
-	keyStream = keyStream[lengthIntegrityKeyIPSec:]
-	childSecurityAssociation.ResponderToInitiatorEncryptionKey =
-		append(childSecurityAssociation.ResponderToInitiatorEncryptionKey, keyStream[:lengthEncryptionKeyIPSec]...)
-	keyStream = keyStream[lengthEncryptionKeyIPSec:]
-	childSecurityAssociation.ResponderToInitiatorIntegrityKey =
-		append(childSecurityAssociation.ResponderToInitiatorIntegrityKey, keyStream[:lengthIntegrityKeyIPSec]...)
-
-	return nil
-
 }
 
 // Decrypt
@@ -566,7 +867,7 @@ func DecryptProcedure(ikeSecurityAssociation *context.IKESecurityAssociation, ik
 		transformIntegrityAlgorithm.TransformID, transformIntegrityAlgorithm.AttributePresent,
 		transformIntegrityAlgorithm.AttributeValue)
 	if !ok {
-		ikeLog.Error("Get key length of an unsupported algorithm. This may imply an unsupported tranform is chosen.")
+		secLog.Error("Get key length of an unsupported algorithm. This may imply an unsupported tranform is chosen.")
 		return nil, errors.New("Get key length failed")
 	}
 
@@ -575,8 +876,8 @@ func DecryptProcedure(ikeSecurityAssociation *context.IKESecurityAssociation, ik
 
 	ikeMessageData, err := ikeMessage.Encode()
 	if err != nil {
-		ikeLog.Errorln(err)
-		ikeLog.Error("Error occur when encoding for checksum")
+		secLog.Errorln(err)
+		secLog.Error("Error occur when encoding for checksum")
 		return nil, errors.New("Encoding IKE message failed")
 	}
 
@@ -584,11 +885,11 @@ func DecryptProcedure(ikeSecurityAssociation *context.IKESecurityAssociation, ik
 		ikeMessageData[:len(ikeMessageData)-checksumLength], checksum,
 		transformIntegrityAlgorithm.TransformID)
 	if err != nil {
-		ikeLog.Errorf("Error occur when verifying checksum: %+v", err)
+		secLog.Errorf("Error occur when verifying checksum: %+v", err)
 		return nil, errors.New("Error verify checksum")
 	}
 	if !ok {
-		ikeLog.Warn("Message checksum failed. Drop the message.")
+		secLog.Warn("Message checksum failed. Drop the message.")
 		return nil, errors.New("Checksum failed, drop.")
 	}
 
@@ -597,14 +898,14 @@ func DecryptProcedure(ikeSecurityAssociation *context.IKESecurityAssociation, ik
 	plainText, err := DecryptMessage(ikeSecurityAssociation.SK_ei, encryptedData,
 		transformEncryptionAlgorithm.TransformID)
 	if err != nil {
-		ikeLog.Errorf("Error occur when decrypting message: %+v", err)
+		secLog.Errorf("Error occur when decrypting message: %+v", err)
 		return nil, errors.New("Error decrypting message")
 	}
 
 	var decryptedIKEPayload message.IKEPayloadContainer
 	err = decryptedIKEPayload.Decode(encryptedPayload.NextPayload, plainText)
 	if err != nil {
-		ikeLog.Errorln(err)
+		secLog.Errorln(err)
 		return nil, errors.New("Decoding decrypted payload failed")
 	}
 
@@ -648,21 +949,21 @@ func EncryptProcedure(ikeSecurityAssociation *context.IKESecurityAssociation,
 		transformIntegrityAlgorithm.TransformID, transformIntegrityAlgorithm.AttributePresent,
 		transformIntegrityAlgorithm.AttributeValue)
 	if !ok {
-		ikeLog.Error("Get key length of an unsupported algorithm. This may imply an unsupported tranform is chosen.")
+		secLog.Error("Get key length of an unsupported algorithm. This may imply an unsupported tranform is chosen.")
 		return errors.New("Get key length failed")
 	}
 
 	// Encrypting
 	ikePayloadData, err := ikePayload.Encode()
 	if err != nil {
-		ikeLog.Error(err)
+		secLog.Error(err)
 		return errors.New("Encoding IKE payload failed.")
 	}
 
 	encryptedData, err := EncryptMessage(ikeSecurityAssociation.SK_er, ikePayloadData,
 		transformEncryptionAlgorithm.TransformID)
 	if err != nil {
-		ikeLog.Errorf("Encrypting data error: %+v", err)
+		secLog.Errorf("Encrypting data error: %+v", err)
 		return errors.New("Error encrypting message")
 	}
 
@@ -672,14 +973,14 @@ func EncryptProcedure(ikeSecurityAssociation *context.IKESecurityAssociation,
 	// Calculate checksum
 	responseIKEMessageData, err := responseIKEMessage.Encode()
 	if err != nil {
-		ikeLog.Error(err)
+		secLog.Error(err)
 		return errors.New("Encoding IKE message error")
 	}
 	checksumOfMessage, err := CalculateChecksum(ikeSecurityAssociation.SK_ar,
 		responseIKEMessageData[:len(responseIKEMessageData)-checksumLength],
 		transformIntegrityAlgorithm.TransformID)
 	if err != nil {
-		ikeLog.Errorf("Calculating checksum failed: %+v", err)
+		secLog.Errorf("Calculating checksum failed: %+v", err)
 		return errors.New("Error calculating checksum")
 	}
 	checksumField := sk.EncryptedData[len(sk.EncryptedData)-checksumLength:]
@@ -859,14 +1160,4 @@ func getOutputLength(transformType uint8, transformID uint16, attributePresent b
 		return 0, false
 	}
 }
-
-func concatenateNonceAndSPI(nonce []byte, SPI_initiator uint64, SPI_responder uint64) []byte {
-	spi := make([]byte, 8)
-
-	binary.BigEndian.PutUint64(spi, SPI_initiator)
-	newSlice := append(nonce, spi...)
-	binary.BigEndian.PutUint64(spi, SPI_responder)
-	newSlice = append(newSlice, spi...)
-
-	return newSlice
-}
+*/

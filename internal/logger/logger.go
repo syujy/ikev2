@@ -13,9 +13,13 @@ import (
 
 var log *logrus.Logger
 
-var SecLog *logrus.Entry
-var XFRMLog *logrus.Entry
 var MsgLog *logrus.Entry
+var SecLog *logrus.Entry
+var DHLog *logrus.Entry
+var ENCRLog *logrus.Entry
+var ESNLog *logrus.Entry
+var INTEGLog *logrus.Entry
+var PRFLog *logrus.Entry
 
 func init() {
 	log = logrus.New()
@@ -39,9 +43,13 @@ func init() {
 		log.Hooks.Add(selfLogHook)
 	}
 
-	SecLog = log.WithFields(logrus.Fields{"component": "IKE", "category": "Security"})
-	XFRMLog = log.WithFields(logrus.Fields{"component": "IKE", "category": "XFRM"})
 	MsgLog = log.WithFields(logrus.Fields{"component": "IKE", "category": "Message"})
+	SecLog = log.WithFields(logrus.Fields{"component": "IKE", "category": "Security"})
+	DHLog = log.WithFields(logrus.Fields{"component": "IKE", "category": "DH"})
+	ENCRLog = log.WithFields(logrus.Fields{"component": "IKE", "category": "ENCR"})
+	ESNLog = log.WithFields(logrus.Fields{"component": "IKE", "category": "ESN"})
+	INTEGLog = log.WithFields(logrus.Fields{"component": "IKE", "category": "INTEG"})
+	ESNLog = log.WithFields(logrus.Fields{"component": "IKE", "category": "ESN"})
 }
 
 func SetLogLevel(level logrus.Level) {

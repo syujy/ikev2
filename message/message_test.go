@@ -298,7 +298,7 @@ func TestEncodeDecode(t *testing.T) {
 
 	testSK := new(Encrypted)
 
-	testSK.NextPayload = TypeSA
+	testSK.NextPayload = 33
 
 	ikePayload := IKEPayloadContainer{
 		testSA,
@@ -424,6 +424,9 @@ func TestEncodeDecodeUsingPublicData(t *testing.T) {
 		0x40, 0x48, 0xb7, 0xd5, 0x6e, 0xbc, 0xe8, 0x85, 0x25, 0xe7,
 		0xde, 0x7f, 0x00, 0xd6, 0xc2, 0xd3}
 
+	dataCopy := make([]byte, len(data))
+	copy(dataCopy, data)
+
 	ikePacket := new(IKEMessage)
 	err := ikePacket.Decode(data)
 	if err != nil {
@@ -435,6 +438,9 @@ func TestEncodeDecodeUsingPublicData(t *testing.T) {
 		t.Fatalf("Encode failed: %+v", err)
 	}
 
+	if !bytes.Equal(dataCopy, data) {
+		t.FailNow()
+	}
 	if !bytes.Equal(data, verifyData) {
 		t.FailNow()
 	}

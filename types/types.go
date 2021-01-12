@@ -1,4 +1,4 @@
-package message
+package types
 
 // IKE types
 type IKEPayloadType uint8
@@ -104,8 +104,8 @@ const (
 )
 
 const (
-	ESN_NO = iota
-	ESN_NEED
+	ESN_DISABLE = iota
+	ESN_ENABLE
 )
 
 // used for TrafficSelector-Individual Traffic Selector TSType
@@ -284,4 +284,10 @@ const (
 const (
 	NotifyType5G_QOS_INFOBitDSCPICheck uint8 = 1
 	NotifyType5G_QOS_INFOBitDCSICheck  uint8 = 1 << 1
+)
+
+// IKE role
+const (
+	Role_Initiator = iota
+	Role_Responder
 )
