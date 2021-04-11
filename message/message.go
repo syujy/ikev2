@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"ike/internal/logger"
-	"ike/types"
+	"bitbucket.org/_syujy/ike/internal/logger"
+	"bitbucket.org/_syujy/ike/types"
 
 	"github.com/sirupsen/logrus"
 )

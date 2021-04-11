@@ -5,8 +5,8 @@ import (
 	"math/big"
 	"testing"
 
-	"ike/message"
-	"ike/types"
+	"bitbucket.org/_syujy/ike/message"
+	"bitbucket.org/_syujy/ike/types"
 )
 
 func TestStrToType(t *testing.T) {

@@ -2,10 +2,11 @@ package encr
 
 import (
 	"fmt"
-	"ike/internal/logger"
-	itypes "ike/internal/types"
-	"ike/message"
-	types "ike/types"
+
+	"bitbucket.org/_syujy/ike/internal/logger"
+	itypes "bitbucket.org/_syujy/ike/internal/types"
+	"bitbucket.org/_syujy/ike/message"
+	types "bitbucket.org/_syujy/ike/types"
 
 	"github.com/sirupsen/logrus"
 )

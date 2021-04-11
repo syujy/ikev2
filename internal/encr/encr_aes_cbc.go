@@ -6,10 +6,11 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
-	"ike/internal/lib"
-	itypes "ike/internal/types"
-	types "ike/types"
 	"io"
+
+	"bitbucket.org/_syujy/ike/internal/lib"
+	itypes "bitbucket.org/_syujy/ike/internal/types"
+	types "bitbucket.org/_syujy/ike/types"
 )
 
 const (
