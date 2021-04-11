@@ -1,4 +1,4 @@
-module ike
+module bitbucket.org/_syujy/ike
 
 go 1.14
 
