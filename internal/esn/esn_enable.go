@@ -1,7 +1,7 @@
 package esn
 
 import (
-	"ike/types"
+	"bitbucket.org/_syujy/ike/types"
 )
 
 const string_ESN_ENABLE string = "ESN_ENABLE"

@@ -1,8 +1,9 @@
 package dh
 
 import (
-	"ike/types"
 	"math/big"
+
+	"bitbucket.org/_syujy/ike/types"
 )
 
 const (

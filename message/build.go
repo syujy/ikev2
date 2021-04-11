@@ -2,8 +2,9 @@ package message
 
 import (
 	"encoding/binary"
-	"ike/types"
 	"net"
+
+	"bitbucket.org/_syujy/ike/types"
 )
 
 func (ikeMessage *IKEMessage) BuildIKEHeader(

@@ -4,7 +4,8 @@ import (
 	"crypto/hmac"
 	"crypto/md5"
 	"hash"
-	"ike/types"
+
+	"bitbucket.org/_syujy/ike/types"
 )
 
 const string_PRF_HMAC_MD5 string = "PRF_HMAC_MD5"
