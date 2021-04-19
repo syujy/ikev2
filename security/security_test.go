@@ -6,12 +6,12 @@ import (
 	"sync"
 	"testing"
 
-	"bitbucket.org/_syujy/ike/internal/dh"
-	"bitbucket.org/_syujy/ike/internal/encr"
-	"bitbucket.org/_syujy/ike/internal/esn"
-	"bitbucket.org/_syujy/ike/internal/integ"
-	"bitbucket.org/_syujy/ike/internal/prf"
+	"bitbucket.org/_syujy/ike/dh"
+	"bitbucket.org/_syujy/ike/encr"
+	"bitbucket.org/_syujy/ike/esn"
+	"bitbucket.org/_syujy/ike/integ"
 	"bitbucket.org/_syujy/ike/message"
+	"bitbucket.org/_syujy/ike/prf"
 	"bitbucket.org/_syujy/ike/types"
 )
 
