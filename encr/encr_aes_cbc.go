@@ -9,7 +9,6 @@ import (
 	"io"
 
 	"bitbucket.org/_syujy/ike/internal/lib"
-	itypes "bitbucket.org/_syujy/ike/internal/types"
 	types "bitbucket.org/_syujy/ike/types"
 )
 
@@ -64,7 +63,7 @@ func (t *ENCR_AES_CBC) GetKeyLength() int {
 	return t.keyLength
 }
 
-func (t *ENCR_AES_CBC) Init(key []byte) itypes.IKECrypto {
+func (t *ENCR_AES_CBC) Init(key []byte) IKECrypto {
 	var err error
 	encr := new(ENCR_AES_CBC_Crypto)
 	if len(key) != t.keyLength {
@@ -82,7 +81,7 @@ func (t *ENCR_AES_CBC) XFRMString() string {
 	return "cbc(aes)"
 }
 
-var _ itypes.IKECrypto = &ENCR_AES_CBC_Crypto{}
+var _ IKECrypto = &ENCR_AES_CBC_Crypto{}
 
 type ENCR_AES_CBC_Crypto struct {
 	block cipher.Block

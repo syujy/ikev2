@@ -12,16 +12,15 @@ import (
 	"net"
 	"strings"
 
-	"bitbucket.org/_syujy/ike/internal/dh"
-	"bitbucket.org/_syujy/ike/internal/encr"
-	"bitbucket.org/_syujy/ike/internal/esn"
-	"bitbucket.org/_syujy/ike/internal/integ"
+	"bitbucket.org/_syujy/ike/dh"
+	"bitbucket.org/_syujy/ike/encr"
+	"bitbucket.org/_syujy/ike/esn"
+	"bitbucket.org/_syujy/ike/integ"
 	"bitbucket.org/_syujy/ike/internal/lib"
 	"bitbucket.org/_syujy/ike/internal/logger"
-	"bitbucket.org/_syujy/ike/internal/prf"
-	itypes "bitbucket.org/_syujy/ike/internal/types"
 	"bitbucket.org/_syujy/ike/message"
-	types "bitbucket.org/_syujy/ike/types"
+	"bitbucket.org/_syujy/ike/prf"
+	"bitbucket.org/_syujy/ike/types"
 
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -92,13 +91,13 @@ type IKESA struct {
 	prfInfo   prf.PRFType
 
 	// Security objects
-	Prf_d   hash.Hash        // used to derive key for child sa
-	Integ_i hash.Hash        // used by initiator for integrity checking
-	Integ_r hash.Hash        // used by responder for integrity checking
-	Encr_i  itypes.IKECrypto // used by initiator for encrypting
-	Encr_r  itypes.IKECrypto // used by responder for encrypting
-	Prf_i   hash.Hash        // used by initiator for IKE authentication
-	Prf_r   hash.Hash        // used by responder for IKE authentication
+	Prf_d   hash.Hash      // used to derive key for child sa
+	Integ_i hash.Hash      // used by initiator for integrity checking
+	Integ_r hash.Hash      // used by responder for integrity checking
+	Encr_i  encr.IKECrypto // used by initiator for encrypting
+	Encr_r  encr.IKECrypto // used by responder for encrypting
+	Prf_i   hash.Hash      // used by initiator for IKE authentication
+	Prf_r   hash.Hash      // used by responder for IKE authentication
 }
 
 func (ikesa *IKESA) SelectProposal(proposal *message.Proposal) bool {

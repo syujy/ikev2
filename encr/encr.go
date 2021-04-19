@@ -4,9 +4,8 @@ import (
 	"fmt"
 
 	"bitbucket.org/_syujy/ike/internal/logger"
-	itypes "bitbucket.org/_syujy/ike/internal/types"
 	"bitbucket.org/_syujy/ike/message"
-	types "bitbucket.org/_syujy/ike/types"
+	"bitbucket.org/_syujy/ike/types"
 
 	"github.com/sirupsen/logrus"
 )
@@ -187,7 +186,7 @@ type ENCRType interface {
 	setPriority(uint32)
 	Priority() uint32
 	GetKeyLength() int
-	Init(key []byte) itypes.IKECrypto
+	Init(key []byte) IKECrypto
 }
 
 type ENCRKType interface {
@@ -197,6 +196,11 @@ type ENCRKType interface {
 	Priority() uint32
 	GetKeyLength() int
 	XFRMString() string
+}
+
+type IKECrypto interface {
+	Encrypt(plainText []byte) ([]byte, error)
+	Decrypt(cipherText []byte) ([]byte, error)
 }
 
 /* Archive for future use
