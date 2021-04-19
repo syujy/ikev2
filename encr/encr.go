@@ -142,6 +142,9 @@ func DecodeTransform(transform *message.Transform) ENCRType {
 }
 
 func ToTransform(encrType ENCRType) *message.Transform {
+	if encrType == nil {
+		return nil
+	}
 	t := new(message.Transform)
 	t.TransformType = types.TypeEncryptionAlgorithm
 	t.TransformID = encrType.transformID()
@@ -170,6 +173,9 @@ func DecodeTransformChildSA(transform *message.Transform) ENCRKType {
 }
 
 func ToTransformChildSA(encrKType ENCRKType) *message.Transform {
+	if encrKType == nil {
+		return nil
+	}
 	t := new(message.Transform)
 	t.TransformType = types.TypeEncryptionAlgorithm
 	t.TransformID = encrKType.transformID()

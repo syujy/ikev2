@@ -141,6 +141,9 @@ func DecodeTransform(transform *message.Transform) INTEGType {
 }
 
 func ToTransform(integType INTEGType) *message.Transform {
+	if integType == nil {
+		return nil
+	}
 	t := new(message.Transform)
 	t.TransformType = types.TypeIntegrityAlgorithm
 	t.TransformID = integType.transformID()

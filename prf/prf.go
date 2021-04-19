@@ -93,6 +93,9 @@ func DecodeTransform(transform *message.Transform) PRFType {
 }
 
 func ToTransform(prfType PRFType) *message.Transform {
+	if prfType == nil {
+		return nil
+	}
 	t := new(message.Transform)
 	t.TransformType = types.TypePseudorandomFunction
 	t.TransformID = prfType.transformID()
