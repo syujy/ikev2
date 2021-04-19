@@ -112,6 +112,9 @@ func DecodeTransform(transform *message.Transform) DHType {
 }
 
 func ToTransform(dhType DHType) *message.Transform {
+	if dhType == nil {
+		return nil
+	}
 	t := new(message.Transform)
 	t.TransformType = types.TypeDiffieHellmanGroup
 	t.TransformID = dhType.transformID()

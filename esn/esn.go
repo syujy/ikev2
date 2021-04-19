@@ -86,6 +86,9 @@ func DecodeTransform(transform *message.Transform) ESNType {
 }
 
 func ToTransform(esnType ESNType) *message.Transform {
+	if esnType == nil {
+		return nil
+	}
 	t := new(message.Transform)
 	t.TransformType = types.TypeExtendedSequenceNumbers
 	t.TransformID = esnType.transformID()
