@@ -8,10 +8,10 @@ import (
 	"bitbucket.org/_syujy/ike/types"
 )
 
-const string_AUTH_HMAC_SHA1_96 string = "AUTH_HMAC_SHA1_96"
+const String_AUTH_HMAC_SHA1_96 string = "AUTH_HMAC_SHA1_96"
 
 func toString_AUTH_HMAC_SHA1_96(attrType uint16, intValue uint16, bytesValue []byte) string {
-	return string_AUTH_HMAC_SHA1_96
+	return String_AUTH_HMAC_SHA1_96
 }
 
 var _ INTEGType = &AUTH_HMAC_SHA1_96{}

@@ -26,6 +26,23 @@ func TestStrToType(t *testing.T) {
 	}
 }
 
+func TestStrToTransform(t *testing.T) {
+	// Test StrToTransform return a transform
+	integTran := StrToTransform("AUTH_HMAC_MD5_96")
+	if integTran == nil {
+		t.Fatal("Get transform AUTH_HMAC_MD5_96 failed")
+	}
+	integTran = StrToTransform("AUTH_HMAC_SHA1_96")
+	if integTran == nil {
+		t.Fatal("Get transform AUTH_HMAC_SHA1_96 failed")
+	}
+	// Test StrToTransform return a nil
+	integTran = StrToTransform("HMAC_MD5_96")
+	if integTran != nil {
+		t.Fatal("Get a transform with an undefined type string")
+	}
+}
+
 func TestStrToKType(t *testing.T) {
 	// Test StrToType return a type
 	integType := StrToKType("AUTH_HMAC_MD5_96")
@@ -40,6 +57,23 @@ func TestStrToKType(t *testing.T) {
 	integType = StrToKType("HMAC_MD5_96")
 	if integType != nil {
 		t.Fatal("Get a type object with an undefined type string")
+	}
+}
+
+func TestStrToKTransform(t *testing.T) {
+	// Test StrToKTransform return a transform
+	integKTran := StrToKTransform("AUTH_HMAC_MD5_96")
+	if integKTran == nil {
+		t.Fatal("Get transform AUTH_HMAC_MD5_96 failed")
+	}
+	integKTran = StrToKTransform("AUTH_HMAC_SHA1_96")
+	if integKTran == nil {
+		t.Fatal("Get transform AUTH_HMAC_SHA1_96 failed")
+	}
+	// Test StrToKTransform return a nil
+	integKTran = StrToKTransform("HMAC_MD5_96")
+	if integKTran != nil {
+		t.Fatal("Get a transform with an undefined type string")
 	}
 }
 
@@ -228,8 +262,8 @@ func TestDecodeTransformChildSA(t *testing.T) {
 // Interfaces implementation tests
 func TestAUTH_HMAC_MD5_96(t *testing.T) {
 	// Get type using StrToType
-	integType := StrToType(string_AUTH_HMAC_MD5_96)
-	integKType := StrToKType(string_AUTH_HMAC_MD5_96)
+	integType := StrToType(String_AUTH_HMAC_MD5_96)
+	integKType := StrToKType(String_AUTH_HMAC_MD5_96)
 	integHMACMD596 := integType.(*AUTH_HMAC_MD5_96)
 	integKHMACMD596 := integKType.(*AUTH_HMAC_MD5_96)
 
@@ -334,8 +368,8 @@ func TestAUTH_HMAC_MD5_96(t *testing.T) {
 
 func TestAUTH_HMAC_SHA1_96(t *testing.T) {
 	// Get type using StrToType
-	integType := StrToType(string_AUTH_HMAC_SHA1_96)
-	integKType := StrToKType(string_AUTH_HMAC_SHA1_96)
+	integType := StrToType(String_AUTH_HMAC_SHA1_96)
+	integKType := StrToKType(String_AUTH_HMAC_SHA1_96)
 	integHMACSHA196 := integType.(*AUTH_HMAC_SHA1_96)
 	integKHMACSHA196 := integKType.(*AUTH_HMAC_SHA1_96)
 

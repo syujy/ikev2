@@ -3,23 +3,17 @@ package encr
 import (
 	"fmt"
 
-	"bitbucket.org/_syujy/ike/internal/logger"
 	"bitbucket.org/_syujy/ike/message"
 	"bitbucket.org/_syujy/ike/types"
-
-	"github.com/sirupsen/logrus"
 )
 
-var encrLog *logrus.Entry
 var encrString map[uint16]func(uint16, uint16, []byte) string
-
 var encrTypes map[string]ENCRType
 var encrKTypes map[string]ENCRKType
+var encrTrans map[string]*message.Transform
+var encrKTrans map[string]*message.Transform
 
 func init() {
-	// Log
-	encrLog = logger.ENCRLog
-
 	// ENCR String
 	encrString = make(map[uint16]func(uint16, uint16, []byte) string)
 	encrString[types.ENCR_AES_CBC] = toString_ENCR_AES_CBC
@@ -27,21 +21,21 @@ func init() {
 	// ENCR Types
 	encrTypes = make(map[string]ENCRType)
 
-	encrTypes[string_ENCR_AES_CBC_128] = &ENCR_AES_CBC{
+	encrTypes[String_ENCR_AES_CBC_128] = &ENCR_AES_CBC{
 		keyLength: 16,
 	}
-	encrTypes[string_ENCR_AES_CBC_192] = &ENCR_AES_CBC{
+	encrTypes[String_ENCR_AES_CBC_192] = &ENCR_AES_CBC{
 		keyLength: 24,
 	}
-	encrTypes[string_ENCR_AES_CBC_256] = &ENCR_AES_CBC{
+	encrTypes[String_ENCR_AES_CBC_256] = &ENCR_AES_CBC{
 		keyLength: 32,
 	}
 
 	// Default Priority
 	priority := []string{
-		string_ENCR_AES_CBC_128,
-		string_ENCR_AES_CBC_192,
-		string_ENCR_AES_CBC_256,
+		String_ENCR_AES_CBC_128,
+		String_ENCR_AES_CBC_192,
+		String_ENCR_AES_CBC_256,
 	}
 
 	// Set Priority
@@ -49,21 +43,20 @@ func init() {
 		if encrType, ok := encrTypes[s]; ok {
 			encrType.setPriority(uint32(i))
 		} else {
-			encrLog.Error("No such ENCR implementation")
-			panic("IKE ENCR failed to init.")
+			panic("IKE ENCR failed to init. Error: No such ENCR implementation.")
 		}
 	}
 
 	// ENCR Kernel Types
 	encrKTypes = make(map[string]ENCRKType)
 
-	encrKTypes[string_ENCR_AES_CBC_128] = &ENCR_AES_CBC{
+	encrKTypes[String_ENCR_AES_CBC_128] = &ENCR_AES_CBC{
 		keyLength: 16,
 	}
-	encrKTypes[string_ENCR_AES_CBC_192] = &ENCR_AES_CBC{
+	encrKTypes[String_ENCR_AES_CBC_192] = &ENCR_AES_CBC{
 		keyLength: 24,
 	}
-	encrKTypes[string_ENCR_AES_CBC_256] = &ENCR_AES_CBC{
+	encrKTypes[String_ENCR_AES_CBC_256] = &ENCR_AES_CBC{
 		keyLength: 32,
 	}
 
@@ -73,11 +66,23 @@ func init() {
 		if encrKType, ok := encrKTypes[s]; ok {
 			encrKType.setPriority(uint32(i))
 		} else {
-			encrLog.Error("No such ENCR implementation")
-			panic("IKE ENCR failed to init.")
+			panic("IKE ENCR failed to init. Error: No such ENCR implementation.")
 		}
 	}
 
+	// ENCR Transforms
+	encrTrans = make(map[string]*message.Transform)
+	// Set encrTrans
+	for s, t := range encrTypes {
+		encrTrans[s] = ToTransform(t)
+	}
+
+	// ENCR Kernel Transforms
+	encrKTrans = make(map[string]*message.Transform)
+	// Set encrKTrans
+	for s, t := range encrKTypes {
+		encrKTrans[s] = ToTransformChildSA(t)
+	}
 }
 
 func SetPriority(algolist []string) error {
@@ -116,8 +121,24 @@ func StrToType(algo string) ENCRType {
 	}
 }
 
+func StrToTransform(algo string) *message.Transform {
+	if t, ok := encrTrans[algo]; ok {
+		return t
+	} else {
+		return nil
+	}
+}
+
 func StrToKType(algo string) ENCRKType {
 	if t, ok := encrKTypes[algo]; ok {
+		return t
+	} else {
+		return nil
+	}
+}
+
+func StrToKTransform(algo string) *message.Transform {
+	if t, ok := encrKTrans[algo]; ok {
 		return t
 	} else {
 		return nil
@@ -192,7 +213,7 @@ type ENCRType interface {
 	setPriority(uint32)
 	Priority() uint32
 	GetKeyLength() int
-	Init(key []byte) IKECrypto
+	Init(key []byte) (IKECrypto, error)
 }
 
 type ENCRKType interface {

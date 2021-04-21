@@ -7,9 +7,9 @@ import (
 )
 
 const (
-	string_DH_2048_BIT_MODP string = "DH_2048_BIT_MODP"
+	String_DH_2048_BIT_MODP string = "DH_2048_BIT_MODP"
 	// Parameters
-	Group14PrimeString string = "FFFFFFFFFFFFFFFFC90FDAA22168C234" +
+	group14PrimeString string = "FFFFFFFFFFFFFFFFC90FDAA22168C234" +
 		"C4C6628B80DC1CD129024E088A67CC74" +
 		"020BBEA63B139B22514A08798E3404DD" +
 		"EF9519B3CD3A431B302B0A6DF25F1437" +
@@ -25,11 +25,11 @@ const (
 		"B5C55DF06F4C52C9DE2BCBF695581718" +
 		"3995497CEA956AE515D2261898FA0510" +
 		"15728E5A8AACAA68FFFFFFFFFFFFFFFF"
-	Group14Generator = 2
+	group14Generator = 2
 )
 
 func toString_DH_2048_BIT_MODP(attrType uint16, intValue uint16, bytesValue []byte) string {
-	return string_DH_2048_BIT_MODP
+	return String_DH_2048_BIT_MODP
 }
 
 var _ DHType = &DH_2048_BIT_MODP{}

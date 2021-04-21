@@ -25,6 +25,23 @@ func TestStrToType(t *testing.T) {
 	}
 }
 
+func TestStrToTransform(t *testing.T) {
+	// Test StrToTransform return a transform
+	esnTran := StrToTransform("ESN_ENABLE")
+	if esnTran == nil {
+		t.Fatal("Get transform ESN_ENABLE failed")
+	}
+	esnTran = StrToTransform("ESN_DISABLE")
+	if esnTran == nil {
+		t.Fatal("Get transform ESN_DIABLE failed")
+	}
+	// Test StrToTransform return a nil
+	esnTran = StrToTransform("ENABLE")
+	if esnTran != nil {
+		t.Fatal("Get a transform with an undefined type string")
+	}
+}
+
 func TestSetPriority(t *testing.T) {
 	// Test SetPriority set priority correctly
 	esnTypeOff := StrToType("ESN_DISABLE") // will be set to priority 1
@@ -119,7 +136,7 @@ func TestDecodeTransform(t *testing.T) {
 // Interfaces implementation tests
 func TestESN_ENABLE(t *testing.T) {
 	// Get type using StrToType
-	esnType := StrToType(string_ESN_ENABLE)
+	esnType := StrToType(String_ESN_ENABLE)
 	esnEnable := esnType.(*ESN_ENABLE)
 
 	// transformID()
@@ -162,7 +179,7 @@ func TestESN_ENABLE(t *testing.T) {
 
 func TestESN_DISABLE(t *testing.T) {
 	// Get type using StrToType
-	esnType := StrToType(string_ESN_DISABLE)
+	esnType := StrToType(String_ESN_DISABLE)
 	esnDisable := esnType.(*ESN_DISABLE)
 
 	// transformID()

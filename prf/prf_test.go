@@ -26,6 +26,23 @@ func TestStrToType(t *testing.T) {
 	}
 }
 
+func TestStrToTransform(t *testing.T) {
+	// Test StrToTransform return a transform
+	prfTran := StrToTransform("PRF_HMAC_MD5")
+	if prfTran == nil {
+		t.Fatal("Get transform PRF_HMAC_MD5 failed")
+	}
+	prfTran = StrToTransform("PRF_HMAC_SHA1")
+	if prfTran == nil {
+		t.Fatal("Get transform PRF_HMAC_SHA1 failed")
+	}
+	// Test StrToTransform return a nil
+	prfTran = StrToTransform("HMAC_MD5")
+	if prfTran != nil {
+		t.Fatal("Get a transform with an undefined type string")
+	}
+}
+
 func TestSetPriority(t *testing.T) {
 	// Test SetPriority set priority correctly
 	prfTypehmacmd5 := StrToType("PRF_HMAC_MD5")   // will be set to priority 1
@@ -119,7 +136,7 @@ func TestDecodeTransform(t *testing.T) {
 // Interfaces implementation tests
 func TestPRF_HMAC_MD5(t *testing.T) {
 	// Get type using StrToType
-	prfType := StrToType(string_PRF_HMAC_MD5)
+	prfType := StrToType(String_PRF_HMAC_MD5)
 	prfHMACMD5 := prfType.(*PRF_HMAC_MD5)
 
 	// transformID()
@@ -180,7 +197,7 @@ func TestPRF_HMAC_MD5(t *testing.T) {
 
 func TestPRF_HMAC_SHA1(t *testing.T) {
 	// Get type using StrToType
-	prfType := StrToType(string_PRF_HMAC_SHA1)
+	prfType := StrToType(String_PRF_HMAC_SHA1)
 	prfHMACSHA1 := prfType.(*PRF_HMAC_SHA1)
 
 	// transformID()

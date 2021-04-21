@@ -29,8 +29,29 @@ func TestStrToType(t *testing.T) {
 	}
 }
 
+func TestStrToTransform(t *testing.T) {
+	// Test StrToTransform return a transform
+	encrTran := StrToTransform("ENCR_AES_CBC_128")
+	if encrTran == nil {
+		t.Fatal("Get transform ENCR_AES_CBC_128 failed")
+	}
+	encrTran = StrToTransform("ENCR_AES_CBC_192")
+	if encrTran == nil {
+		t.Fatal("Get transform ENCR_AES_CBC_192 failed")
+	}
+	encrTran = StrToTransform("ENCR_AES_CBC_256")
+	if encrTran == nil {
+		t.Fatal("Get transform ENCR_AES_CBC_256 failed")
+	}
+	// Test StrToTransform return a nil
+	encrTran = StrToTransform("AES_CBC_128")
+	if encrTran != nil {
+		t.Fatal("Get a transform with an undefined type string")
+	}
+}
+
 func TestStrToKType(t *testing.T) {
-	// Test StrToType return a type
+	// Test StrToKType return a type
 	encrType := StrToKType("ENCR_AES_CBC_128")
 	if encrType == nil {
 		t.Fatal("Get type ENCR_AES_CBC_128 failed")
@@ -43,10 +64,31 @@ func TestStrToKType(t *testing.T) {
 	if encrType == nil {
 		t.Fatal("Get type ENCR_AES_CBC_256 failed")
 	}
-	// Test StrToType return a nil
+	// Test StrToKType return a nil
 	encrType = StrToKType("AES_CBC_128")
 	if encrType != nil {
 		t.Fatal("Get a type object with an undefined type string")
+	}
+}
+
+func TestStrToKTransform(t *testing.T) {
+	// Test StrToKTransform return a transform
+	encrTran := StrToKTransform("ENCR_AES_CBC_128")
+	if encrTran == nil {
+		t.Fatal("Get transform ENCR_AES_CBC_128 failed")
+	}
+	encrTran = StrToKTransform("ENCR_AES_CBC_192")
+	if encrTran == nil {
+		t.Fatal("Get transform ENCR_AES_CBC_192 failed")
+	}
+	encrTran = StrToKTransform("ENCR_AES_CBC_256")
+	if encrTran == nil {
+		t.Fatal("Get transform ENCR_AES_CBC_256 failed")
+	}
+	// Test StrToKTransform return a nil
+	encrTran = StrToKTransform("AES_CBC_128")
+	if encrTran != nil {
+		t.Fatal("Get a transform with an undefined type string")
 	}
 }
 
@@ -258,8 +300,8 @@ func TestDecodeTransformChildSA(t *testing.T) {
 // Interfaces implementation tests
 func TestENCR_AES_CBC_128(t *testing.T) {
 	// Get type using StrToType
-	encrType := StrToType(string_ENCR_AES_CBC_128)
-	encrKType := StrToKType(string_ENCR_AES_CBC_128)
+	encrType := StrToType(String_ENCR_AES_CBC_128)
+	encrKType := StrToKType(String_ENCR_AES_CBC_128)
 	encrAESCBC128 := encrType.(*ENCR_AES_CBC)
 	encrKAESCBC128 := encrKType.(*ENCR_AES_CBC)
 
@@ -314,13 +356,13 @@ func TestENCR_AES_CBC_128(t *testing.T) {
 
 	// Object
 	// Input an error key
-	cryptoObj := encrType.Init(append(key, 0x09))
-	if cryptoObj != nil {
+	cryptoObj, err := encrType.Init(append(key, 0x09))
+	if cryptoObj != nil || err == nil {
 		t.Fatal("Doesn't return nil when fed with a key with mismatched length")
 	}
 	// Input a correct key
-	cryptoObj = encrType.Init(key)
-	if cryptoObj == nil {
+	cryptoObj, err = encrType.Init(key)
+	if cryptoObj == nil || err != nil {
 		t.Fatal("Cannot init crypto obj with a correct key")
 	}
 
@@ -391,8 +433,8 @@ func TestENCR_AES_CBC_128(t *testing.T) {
 
 func TestENCR_AES_CBC_192(t *testing.T) {
 	// Get type using StrToType
-	encrType := StrToType(string_ENCR_AES_CBC_192)
-	encrKType := StrToKType(string_ENCR_AES_CBC_192)
+	encrType := StrToType(String_ENCR_AES_CBC_192)
+	encrKType := StrToKType(String_ENCR_AES_CBC_192)
 	encrAESCBC192 := encrType.(*ENCR_AES_CBC)
 	encrKAESCBC192 := encrKType.(*ENCR_AES_CBC)
 
@@ -447,13 +489,13 @@ func TestENCR_AES_CBC_192(t *testing.T) {
 
 	// Object
 	// Input an error key
-	cryptoObj := encrType.Init(append(key, 0x09))
-	if cryptoObj != nil {
+	cryptoObj, err := encrType.Init(append(key, 0x09))
+	if cryptoObj != nil || err == nil {
 		t.Fatal("Doesn't return nil when fed with a key with mismatched length")
 	}
 	// Input a correct key
-	cryptoObj = encrType.Init(key)
-	if cryptoObj == nil {
+	cryptoObj, err = encrType.Init(key)
+	if cryptoObj == nil || err != nil {
 		t.Fatal("Cannot init crypto obj with a correct key")
 	}
 
@@ -524,8 +566,8 @@ func TestENCR_AES_CBC_192(t *testing.T) {
 
 func TestENCR_AES_CBC_256(t *testing.T) {
 	// Get type using StrToType
-	encrType := StrToType(string_ENCR_AES_CBC_256)
-	encrKType := StrToKType(string_ENCR_AES_CBC_256)
+	encrType := StrToType(String_ENCR_AES_CBC_256)
+	encrKType := StrToKType(String_ENCR_AES_CBC_256)
 	encrAESCBC256 := encrType.(*ENCR_AES_CBC)
 	encrKAESCBC256 := encrKType.(*ENCR_AES_CBC)
 
@@ -580,13 +622,13 @@ func TestENCR_AES_CBC_256(t *testing.T) {
 
 	// Object
 	// Input an error key
-	cryptoObj := encrType.Init(append(key, 0x09))
-	if cryptoObj != nil {
+	cryptoObj, err := encrType.Init(append(key, 0x09))
+	if cryptoObj != nil || err == nil {
 		t.Fatal("Doesn't return nil when fed with a key with mismatched length")
 	}
 	// Input a correct key
-	cryptoObj = encrType.Init(key)
-	if cryptoObj == nil {
+	cryptoObj, err = encrType.Init(key)
+	if cryptoObj == nil || err != nil {
 		t.Fatal("Cannot init crypto obj with a correct key")
 	}
 

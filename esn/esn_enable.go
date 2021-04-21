@@ -4,10 +4,10 @@ import (
 	"bitbucket.org/_syujy/ike/types"
 )
 
-const string_ESN_ENABLE string = "ESN_ENABLE"
+const String_ESN_ENABLE string = "ESN_ENABLE"
 
 func toString_ESN_ENABLE(attrType uint16, intValue uint16, bytesValue []byte) string {
-	return string_ESN_ENABLE
+	return String_ESN_ENABLE
 }
 
 var _ ESNType = &ESN_ENABLE{}
