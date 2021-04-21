@@ -4,23 +4,16 @@ import (
 	"errors"
 	"hash"
 
-	"bitbucket.org/_syujy/ike/internal/logger"
 	"bitbucket.org/_syujy/ike/message"
 	"bitbucket.org/_syujy/ike/types"
-
-	"github.com/sirupsen/logrus"
 )
 
-var integLog *logrus.Entry
 var integString map[uint16]func(uint16, uint16, []byte) string
 
 var integTypes map[string]INTEGType
 var integKTypes map[string]INTEGKType
 
 func init() {
-	// Log
-	integLog = logger.INTEGLog
-
 	// INTEG String
 	integString = make(map[uint16]func(uint16, uint16, []byte) string)
 	integString[types.AUTH_HMAC_MD5_96] = toString_AUTH_HMAC_MD5_96
@@ -29,19 +22,19 @@ func init() {
 	// INTEG Types
 	integTypes = make(map[string]INTEGType)
 
-	integTypes[string_AUTH_HMAC_MD5_96] = &AUTH_HMAC_MD5_96{
+	integTypes[String_AUTH_HMAC_MD5_96] = &AUTH_HMAC_MD5_96{
 		keyLength:    16,
 		outputLength: 12,
 	}
-	integTypes[string_AUTH_HMAC_SHA1_96] = &AUTH_HMAC_SHA1_96{
+	integTypes[String_AUTH_HMAC_SHA1_96] = &AUTH_HMAC_SHA1_96{
 		keyLength:    20,
 		outputLength: 12,
 	}
 
 	// Default Priority
 	priority := []string{
-		string_AUTH_HMAC_MD5_96,
-		string_AUTH_HMAC_SHA1_96,
+		String_AUTH_HMAC_MD5_96,
+		String_AUTH_HMAC_SHA1_96,
 	}
 
 	// Set Priority
@@ -49,19 +42,18 @@ func init() {
 		if integType, ok := integTypes[s]; ok {
 			integType.setPriority(uint32(i))
 		} else {
-			integLog.Error("No such INTEG implementation")
-			panic("IKE INTEG failed to init.")
+			panic("IKE INTEG failed to init. Error: No such INTEG implementation.")
 		}
 	}
 
 	// INTEG Kernel Types
 	integKTypes = make(map[string]INTEGKType)
 
-	integKTypes[string_AUTH_HMAC_MD5_96] = &AUTH_HMAC_MD5_96{
+	integKTypes[String_AUTH_HMAC_MD5_96] = &AUTH_HMAC_MD5_96{
 		keyLength:    16,
 		outputLength: 12,
 	}
-	integKTypes[string_AUTH_HMAC_SHA1_96] = &AUTH_HMAC_SHA1_96{
+	integKTypes[String_AUTH_HMAC_SHA1_96] = &AUTH_HMAC_SHA1_96{
 		keyLength:    20,
 		outputLength: 12,
 	}
@@ -72,8 +64,7 @@ func init() {
 		if integKType, ok := integKTypes[s]; ok {
 			integKType.setPriority(uint32(i))
 		} else {
-			integLog.Error("No such INTEG implementation")
-			panic("IKE INTEG failed to init.")
+			panic("IKE INTEG failed to init. Error: No such INTEG implementation.")
 		}
 	}
 

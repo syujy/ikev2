@@ -4,21 +4,14 @@ import (
 	"fmt"
 	"math/big"
 
-	"bitbucket.org/_syujy/ike/internal/logger"
 	"bitbucket.org/_syujy/ike/message"
 	"bitbucket.org/_syujy/ike/types"
-
-	"github.com/sirupsen/logrus"
 )
 
-var dhLog *logrus.Entry
 var dhString map[uint16]func(uint16, uint16, []byte) string
 var dhTypes map[string]DHType
 
 func init() {
-	// Log
-	dhLog = logger.DHLog
-
 	// DH String
 	dhString = make(map[uint16]func(uint16, uint16, []byte) string)
 	dhString[types.DH_1024_BIT_MODP] = toString_DH_1024_BIT_MODP
@@ -30,26 +23,24 @@ func init() {
 	var factor, generator *big.Int
 
 	// Group 2: DH_1024_BIT_MODP
-	factor, ok := new(big.Int).SetString(Group2PrimeString, 16)
+	factor, ok := new(big.Int).SetString(group2PrimeString, 16)
 	if !ok {
-		dhLog.Error("Error occurs when setting big number")
-		panic("IKE Diffie Hellman Group failed to init.")
+		panic("IKE Diffie Hellman Group failed to init. Error: Setting big number.")
 	}
-	generator = new(big.Int).SetUint64(Group2Generator)
-	dhTypes[string_DH_1024_BIT_MODP] = &DH_1024_BIT_MODP{
+	generator = new(big.Int).SetUint64(group2Generator)
+	dhTypes[String_DH_1024_BIT_MODP] = &DH_1024_BIT_MODP{
 		factor:            factor,
 		generator:         generator,
 		factorBytesLength: len(factor.Bytes()),
 	}
 
 	// Group 14: DH_2048_BIT_MODP
-	factor, ok = new(big.Int).SetString(Group14PrimeString, 16)
+	factor, ok = new(big.Int).SetString(group14PrimeString, 16)
 	if !ok {
-		dhLog.Error("Error occurs when setting big number")
-		panic("IKE Diffie Hellman Group failed to init.")
+		panic("IKE Diffie Hellman Group failed to init. Error: Setting big number.")
 	}
-	generator = new(big.Int).SetUint64(Group14Generator)
-	dhTypes[string_DH_2048_BIT_MODP] = &DH_2048_BIT_MODP{
+	generator = new(big.Int).SetUint64(group14Generator)
+	dhTypes[String_DH_2048_BIT_MODP] = &DH_2048_BIT_MODP{
 		factor:            factor,
 		generator:         generator,
 		factorBytesLength: len(factor.Bytes()),
@@ -57,8 +48,8 @@ func init() {
 
 	// Default Priority
 	priority := []string{
-		string_DH_1024_BIT_MODP,
-		string_DH_2048_BIT_MODP,
+		String_DH_1024_BIT_MODP,
+		String_DH_2048_BIT_MODP,
 	}
 
 	// Set Priority
@@ -66,8 +57,7 @@ func init() {
 		if dhType, ok := dhTypes[s]; ok {
 			dhType.setPriority(uint32(i))
 		} else {
-			dhLog.Error("No such DH group implementation")
-			panic("IKE Diffie Hellman Group failed to init.")
+			panic("IKE Diffie Hellman Group failed to init. Error: No such DH group implementation.")
 		}
 	}
 }

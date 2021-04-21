@@ -279,11 +279,19 @@ func (ikesa *IKESA) GenerateKey(concatenatedNonce, dhSharedKey []byte) error {
 	secLog.Tracef("SK_pr:\n%s", hex.Dump(sk_pr))
 
 	// Set security objects
+	encri, err := ikesa.encrInfo.Init(sk_ei)
+	if err != nil {
+		return err
+	}
+	encrr, err := ikesa.encrInfo.Init(sk_er)
+	if err != nil {
+		return err
+	}
 	ikesa.Prf_d = ikesa.prfInfo.Init(sk_d)
 	ikesa.Integ_i = ikesa.integInfo.Init(sk_ai)
 	ikesa.Integ_r = ikesa.integInfo.Init(sk_ar)
-	ikesa.Encr_i = ikesa.encrInfo.Init(sk_ei)
-	ikesa.Encr_r = ikesa.encrInfo.Init(sk_er)
+	ikesa.Encr_i = encri
+	ikesa.Encr_r = encrr
 	ikesa.Prf_i = ikesa.prfInfo.Init(sk_pi)
 	ikesa.Prf_r = ikesa.prfInfo.Init(sk_pr)
 

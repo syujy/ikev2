@@ -119,7 +119,7 @@ func TestDecodeTransform(t *testing.T) {
 // Interfaces implementation tests
 func TestPRF_HMAC_MD5(t *testing.T) {
 	// Get type using StrToType
-	prfType := StrToType(string_PRF_HMAC_MD5)
+	prfType := StrToType(String_PRF_HMAC_MD5)
 	prfHMACMD5 := prfType.(*PRF_HMAC_MD5)
 
 	// transformID()
@@ -180,7 +180,7 @@ func TestPRF_HMAC_MD5(t *testing.T) {
 
 func TestPRF_HMAC_SHA1(t *testing.T) {
 	// Get type using StrToType
-	prfType := StrToType(string_PRF_HMAC_SHA1)
+	prfType := StrToType(String_PRF_HMAC_SHA1)
 	prfHMACSHA1 := prfType.(*PRF_HMAC_SHA1)
 
 	// transformID()

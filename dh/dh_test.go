@@ -120,7 +120,7 @@ func TestDecodeTransform(t *testing.T) {
 // Interfaces implementation tests
 func TestDH_1024_BIT_MODP(t *testing.T) {
 	// Get type using StrToType
-	dhType := StrToType(string_DH_1024_BIT_MODP)
+	dhType := StrToType(String_DH_1024_BIT_MODP)
 	dh1024modpgroup := dhType.(*DH_1024_BIT_MODP)
 
 	// transformID()
@@ -225,7 +225,7 @@ func TestDH_1024_BIT_MODP(t *testing.T) {
 
 func TestDH_2048_BIT_MODP(t *testing.T) {
 	// Get type using StrToType
-	dhType := StrToType(string_DH_2048_BIT_MODP)
+	dhType := StrToType(String_DH_2048_BIT_MODP)
 	dh2048modpgroup := dhType.(*DH_2048_BIT_MODP)
 
 	// transformID()

@@ -119,7 +119,7 @@ func TestDecodeTransform(t *testing.T) {
 // Interfaces implementation tests
 func TestESN_ENABLE(t *testing.T) {
 	// Get type using StrToType
-	esnType := StrToType(string_ESN_ENABLE)
+	esnType := StrToType(String_ESN_ENABLE)
 	esnEnable := esnType.(*ESN_ENABLE)
 
 	// transformID()
@@ -162,7 +162,7 @@ func TestESN_ENABLE(t *testing.T) {
 
 func TestESN_DISABLE(t *testing.T) {
 	// Get type using StrToType
-	esnType := StrToType(string_ESN_DISABLE)
+	esnType := StrToType(String_ESN_DISABLE)
 	esnDisable := esnType.(*ESN_DISABLE)
 
 	// transformID()

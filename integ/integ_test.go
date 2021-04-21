@@ -228,8 +228,8 @@ func TestDecodeTransformChildSA(t *testing.T) {
 // Interfaces implementation tests
 func TestAUTH_HMAC_MD5_96(t *testing.T) {
 	// Get type using StrToType
-	integType := StrToType(string_AUTH_HMAC_MD5_96)
-	integKType := StrToKType(string_AUTH_HMAC_MD5_96)
+	integType := StrToType(String_AUTH_HMAC_MD5_96)
+	integKType := StrToKType(String_AUTH_HMAC_MD5_96)
 	integHMACMD596 := integType.(*AUTH_HMAC_MD5_96)
 	integKHMACMD596 := integKType.(*AUTH_HMAC_MD5_96)
 
@@ -334,8 +334,8 @@ func TestAUTH_HMAC_MD5_96(t *testing.T) {
 
 func TestAUTH_HMAC_SHA1_96(t *testing.T) {
 	// Get type using StrToType
-	integType := StrToType(string_AUTH_HMAC_SHA1_96)
-	integKType := StrToKType(string_AUTH_HMAC_SHA1_96)
+	integType := StrToType(String_AUTH_HMAC_SHA1_96)
+	integKType := StrToKType(String_AUTH_HMAC_SHA1_96)
 	integHMACSHA196 := integType.(*AUTH_HMAC_SHA1_96)
 	integKHMACSHA196 := integKType.(*AUTH_HMAC_SHA1_96)
 

@@ -3,21 +3,14 @@ package esn
 import (
 	"errors"
 
-	"bitbucket.org/_syujy/ike/internal/logger"
 	"bitbucket.org/_syujy/ike/message"
 	"bitbucket.org/_syujy/ike/types"
-
-	"github.com/sirupsen/logrus"
 )
 
-var esnLog *logrus.Entry
 var esnString map[uint16]func(uint16, uint16, []byte) string
 var esnTypes map[string]ESNType
 
 func init() {
-	// Log
-	esnLog = logger.ESNLog
-
 	// ESN String
 	esnString = make(map[uint16]func(uint16, uint16, []byte) string)
 	esnString[types.ESN_ENABLE] = toString_ESN_ENABLE
@@ -26,13 +19,13 @@ func init() {
 	// ESN Types
 	esnTypes = make(map[string]ESNType)
 
-	esnTypes[string_ESN_ENABLE] = &ESN_ENABLE{}
-	esnTypes[string_ESN_DISABLE] = &ESN_DISABLE{}
+	esnTypes[String_ESN_ENABLE] = &ESN_ENABLE{}
+	esnTypes[String_ESN_DISABLE] = &ESN_DISABLE{}
 
 	// Default Priority
 	priority := []string{
-		string_ESN_ENABLE,
-		string_ESN_DISABLE,
+		String_ESN_ENABLE,
+		String_ESN_DISABLE,
 	}
 
 	// Set Priority
@@ -40,8 +33,7 @@ func init() {
 		if esnType, ok := esnTypes[s]; ok {
 			esnType.setPriority(uint32(i))
 		} else {
-			esnLog.Error("No such ESN implementation")
-			panic("IKE ESN failed to init.")
+			panic("IKE ESN failed to init. Error: No such ESN implementation.")
 		}
 	}
 }

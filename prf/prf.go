@@ -4,21 +4,14 @@ import (
 	"errors"
 	"hash"
 
-	"bitbucket.org/_syujy/ike/internal/logger"
 	"bitbucket.org/_syujy/ike/message"
 	"bitbucket.org/_syujy/ike/types"
-
-	"github.com/sirupsen/logrus"
 )
 
-var prfLog *logrus.Entry
 var prfString map[uint16]func(uint16, uint16, []byte) string
 var prfTypes map[string]PRFType
 
 func init() {
-	// Log
-	prfLog = logger.PRFLog
-
 	// PRF String
 	prfString = make(map[uint16]func(uint16, uint16, []byte) string)
 	prfString[types.PRF_HMAC_MD5] = toString_PRF_HMAC_MD5
@@ -27,19 +20,19 @@ func init() {
 	// PRF Types
 	prfTypes = make(map[string]PRFType)
 
-	prfTypes[string_PRF_HMAC_MD5] = &PRF_HMAC_MD5{
+	prfTypes[String_PRF_HMAC_MD5] = &PRF_HMAC_MD5{
 		keyLength:    16,
 		outputLength: 16,
 	}
-	prfTypes[string_PRF_HMAC_SHA1] = &PRF_HMAC_SHA1{
+	prfTypes[String_PRF_HMAC_SHA1] = &PRF_HMAC_SHA1{
 		keyLength:    20,
 		outputLength: 20,
 	}
 
 	// Default Priority
 	priority := []string{
-		string_PRF_HMAC_MD5,
-		string_PRF_HMAC_SHA1,
+		String_PRF_HMAC_MD5,
+		String_PRF_HMAC_SHA1,
 	}
 
 	// Set Priority
@@ -47,8 +40,7 @@ func init() {
 		if prfType, ok := prfTypes[s]; ok {
 			prfType.setPriority(uint32(i))
 		} else {
-			prfLog.Error("No such PRF implementation")
-			panic("IKE PRF failed to init.")
+			panic("IKE PRF failed to init. Error: No such PRF implementation.")
 		}
 	}
 }
