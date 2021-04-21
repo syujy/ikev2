@@ -9,6 +9,7 @@ import (
 
 var esnString map[uint16]func(uint16, uint16, []byte) string
 var esnTypes map[string]ESNType
+var esnTrans map[string]*message.Transform
 
 func init() {
 	// ESN String
@@ -36,6 +37,13 @@ func init() {
 			panic("IKE ESN failed to init. Error: No such ESN implementation.")
 		}
 	}
+
+	// ESN Transforms
+	esnTrans = make(map[string]*message.Transform)
+	// Set esnTrans
+	for s, t := range esnTypes {
+		esnTrans[s] = ToTransform(t)
+	}
 }
 
 func SetPriority(algolist map[string]uint32) error {
@@ -54,6 +62,14 @@ func SetPriority(algolist map[string]uint32) error {
 
 func StrToType(algo string) ESNType {
 	if t, ok := esnTypes[algo]; ok {
+		return t
+	} else {
+		return nil
+	}
+}
+
+func StrToTransform(algo string) *message.Transform {
+	if t, ok := esnTrans[algo]; ok {
 		return t
 	} else {
 		return nil

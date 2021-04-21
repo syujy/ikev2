@@ -10,6 +10,7 @@ import (
 
 var dhString map[uint16]func(uint16, uint16, []byte) string
 var dhTypes map[string]DHType
+var dhTrans map[string]*message.Transform
 
 func init() {
 	// DH String
@@ -60,6 +61,13 @@ func init() {
 			panic("IKE Diffie Hellman Group failed to init. Error: No such DH group implementation.")
 		}
 	}
+
+	// DH Transforms
+	dhTrans = make(map[string]*message.Transform)
+	// Set dhTrans
+	for s, t := range dhTypes {
+		dhTrans[s] = ToTransform(t)
+	}
 }
 
 func SetPriority(algolist map[string]uint32) error {
@@ -78,6 +86,14 @@ func SetPriority(algolist map[string]uint32) error {
 
 func StrToType(algo string) DHType {
 	if t, ok := dhTypes[algo]; ok {
+		return t
+	} else {
+		return nil
+	}
+}
+
+func StrToTransform(algo string) *message.Transform {
+	if t, ok := dhTrans[algo]; ok {
 		return t
 	} else {
 		return nil

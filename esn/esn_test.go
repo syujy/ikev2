@@ -25,6 +25,23 @@ func TestStrToType(t *testing.T) {
 	}
 }
 
+func TestStrToTransform(t *testing.T) {
+	// Test StrToTransform return a transform
+	esnTran := StrToTransform("ESN_ENABLE")
+	if esnTran == nil {
+		t.Fatal("Get transform ESN_ENABLE failed")
+	}
+	esnTran = StrToTransform("ESN_DISABLE")
+	if esnTran == nil {
+		t.Fatal("Get transform ESN_DIABLE failed")
+	}
+	// Test StrToTransform return a nil
+	esnTran = StrToTransform("ENABLE")
+	if esnTran != nil {
+		t.Fatal("Get a transform with an undefined type string")
+	}
+}
+
 func TestSetPriority(t *testing.T) {
 	// Test SetPriority set priority correctly
 	esnTypeOff := StrToType("ESN_DISABLE") // will be set to priority 1

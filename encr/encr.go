@@ -10,6 +10,8 @@ import (
 var encrString map[uint16]func(uint16, uint16, []byte) string
 var encrTypes map[string]ENCRType
 var encrKTypes map[string]ENCRKType
+var encrTrans map[string]*message.Transform
+var encrKTrans map[string]*message.Transform
 
 func init() {
 	// ENCR String
@@ -68,6 +70,19 @@ func init() {
 		}
 	}
 
+	// ENCR Transforms
+	encrTrans = make(map[string]*message.Transform)
+	// Set encrTrans
+	for s, t := range encrTypes {
+		encrTrans[s] = ToTransform(t)
+	}
+
+	// ENCR Kernel Transforms
+	encrKTrans = make(map[string]*message.Transform)
+	// Set encrKTrans
+	for s, t := range encrKTypes {
+		encrKTrans[s] = ToTransformChildSA(t)
+	}
 }
 
 func SetPriority(algolist []string) error {
@@ -106,8 +121,24 @@ func StrToType(algo string) ENCRType {
 	}
 }
 
+func StrToTransform(algo string) *message.Transform {
+	if t, ok := encrTrans[algo]; ok {
+		return t
+	} else {
+		return nil
+	}
+}
+
 func StrToKType(algo string) ENCRKType {
 	if t, ok := encrKTypes[algo]; ok {
+		return t
+	} else {
+		return nil
+	}
+}
+
+func StrToKTransform(algo string) *message.Transform {
+	if t, ok := encrKTrans[algo]; ok {
 		return t
 	} else {
 		return nil

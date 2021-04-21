@@ -10,6 +10,7 @@ import (
 
 var prfString map[uint16]func(uint16, uint16, []byte) string
 var prfTypes map[string]PRFType
+var prfTrans map[string]*message.Transform
 
 func init() {
 	// PRF String
@@ -43,6 +44,13 @@ func init() {
 			panic("IKE PRF failed to init. Error: No such PRF implementation.")
 		}
 	}
+
+	// PRF Transforms
+	prfTrans = make(map[string]*message.Transform)
+	// Set prfTrans
+	for s, t := range prfTypes {
+		prfTrans[s] = ToTransform(t)
+	}
 }
 
 func SetPriority(algolist map[string]uint32) error {
@@ -61,6 +69,14 @@ func SetPriority(algolist map[string]uint32) error {
 
 func StrToType(algo string) PRFType {
 	if t, ok := prfTypes[algo]; ok {
+		return t
+	} else {
+		return nil
+	}
+}
+
+func StrToTransform(algo string) *message.Transform {
+	if t, ok := prfTrans[algo]; ok {
 		return t
 	} else {
 		return nil

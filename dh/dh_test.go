@@ -26,6 +26,23 @@ func TestStrToType(t *testing.T) {
 	}
 }
 
+func TestStrToTransform(t *testing.T) {
+	// Test StrToTransform return a transform
+	dhTran := StrToTransform("DH_1024_BIT_MODP")
+	if dhTran == nil {
+		t.Fatal("Get transform DH_1024_BIT_MODP failed")
+	}
+	dhTran = StrToTransform("DH_2048_BIT_MODP")
+	if dhTran == nil {
+		t.Fatal("Get trandform DH_2048_BIT_MODP failed")
+	}
+	// Test StrToTransform return a nil
+	dhTran = StrToTransform("1024_BIT_MODP")
+	if dhTran != nil {
+		t.Fatal("Get a transform with an undefined type string")
+	}
+}
+
 func TestSetPriority(t *testing.T) {
 	// Test SetPriority set priority correctly
 	dhType1024 := StrToType("DH_1024_BIT_MODP") // will be set to priority 1

@@ -9,9 +9,10 @@ import (
 )
 
 var integString map[uint16]func(uint16, uint16, []byte) string
-
 var integTypes map[string]INTEGType
 var integKTypes map[string]INTEGKType
+var integTrans map[string]*message.Transform
+var integKTrans map[string]*message.Transform
 
 func init() {
 	// INTEG String
@@ -68,6 +69,19 @@ func init() {
 		}
 	}
 
+	// INTEG Transforms
+	integTrans = make(map[string]*message.Transform)
+	// Set integTrans
+	for s, t := range integTypes {
+		integTrans[s] = ToTransform(t)
+	}
+
+	// INTEG Kernel Transforms
+	integKTrans = make(map[string]*message.Transform)
+	// Set integKTrans
+	for s, t := range integKTypes {
+		integKTrans[s] = ToTransformChildSA(t)
+	}
 }
 
 func SetPriority(algolist map[string]uint32) error {
@@ -106,8 +120,24 @@ func StrToType(algo string) INTEGType {
 	}
 }
 
+func StrToTransform(algo string) *message.Transform {
+	if t, ok := integTrans[algo]; ok {
+		return t
+	} else {
+		return nil
+	}
+}
+
 func StrToKType(algo string) INTEGKType {
 	if t, ok := integKTypes[algo]; ok {
+		return t
+	} else {
+		return nil
+	}
+}
+
+func StrToKTransform(algo string) *message.Transform {
+	if t, ok := integKTrans[algo]; ok {
 		return t
 	} else {
 		return nil
@@ -163,6 +193,9 @@ func DecodeTransformChildSA(transform *message.Transform) INTEGKType {
 }
 
 func ToTransformChildSA(integKType INTEGKType) *message.Transform {
+	if integKType == nil {
+		return nil
+	}
 	t := new(message.Transform)
 	t.TransformType = types.TypeIntegrityAlgorithm
 	t.TransformID = integKType.transformID()
