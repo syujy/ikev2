@@ -19,6 +19,10 @@ func init() {
 	msgLog = logger.MsgLog
 }
 
+func SetLogEntry(e *logrus.Entry) {
+	msgLog = e
+}
+
 type IKEMessage struct {
 	InitiatorSPI uint64
 	ResponderSPI uint64

@@ -41,6 +41,10 @@ func init() {
 	randomNumberMinimum.SetString(strings.Repeat("F", 32), 16)
 }
 
+func SetLogEntry(e *logrus.Entry) {
+	secLog = e
+}
+
 func GenerateRandomNumber() *big.Int {
 	var number *big.Int
 	var err error
