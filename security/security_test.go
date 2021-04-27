@@ -22,8 +22,7 @@ func TestGenerateRandomNumber(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go func(wg *sync.WaitGroup) {
-			num := GenerateRandomNumber()
-			if num == nil {
+			if num, err := GenerateRandomNumber(); err != nil {
 				fmt.Print("Generate random number failed.")
 			} else {
 				fmt.Printf("Random number: %v\n", num)
