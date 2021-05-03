@@ -307,11 +307,11 @@ func TestENCR_AES_CBC_128(t *testing.T) {
 
 	// IKE Type
 	// transformID()
-	if encrType.transformID() != types.ENCR_AES_CBC {
+	if encrType.TransformID() != types.ENCR_AES_CBC {
 		t.Fatal("Transform ID not correct")
 	}
 	// getAttribute()
-	attrPresent, attrType, attrValue, byteAttrValue := encrType.getAttribute()
+	attrPresent, attrType, attrValue, byteAttrValue := encrType.GetAttribute()
 	if attrPresent != true {
 		t.Fatal("Attribute Present not correct")
 	}
@@ -326,11 +326,11 @@ func TestENCR_AES_CBC_128(t *testing.T) {
 	}
 	// setPriority()
 	originPriority := encrAESCBC128.priority
-	encrType.setPriority(0)
+	encrType.SetPriority(0)
 	if encrAESCBC128.priority != 0 {
 		t.Fatal("Set Priority failed")
 	}
-	encrType.setPriority(originPriority)
+	encrType.SetPriority(originPriority)
 	if encrAESCBC128.priority != originPriority {
 		t.Fatal("Set Priority failed")
 	}
@@ -390,11 +390,11 @@ func TestENCR_AES_CBC_128(t *testing.T) {
 
 	// Kernel Type
 	// transformID()
-	if encrKType.transformID() != types.ENCR_AES_CBC {
+	if encrKType.TransformID() != types.ENCR_AES_CBC {
 		t.Fatal("Transform ID not correct")
 	}
 	// getAttribute()
-	attrPresent, attrType, attrValue, byteAttrValue = encrKType.getAttribute()
+	attrPresent, attrType, attrValue, byteAttrValue = encrKType.GetAttribute()
 	if attrPresent != true {
 		t.Fatal("Attribute Present not correct")
 	}
@@ -409,11 +409,11 @@ func TestENCR_AES_CBC_128(t *testing.T) {
 	}
 	// setPriority()
 	originPriority = encrKAESCBC128.priority
-	encrKType.setPriority(0)
+	encrKType.SetPriority(0)
 	if encrKAESCBC128.priority != 0 {
 		t.Fatal("Set Priority failed")
 	}
-	encrKType.setPriority(originPriority)
+	encrKType.SetPriority(originPriority)
 	if encrKAESCBC128.priority != originPriority {
 		t.Fatal("Set Priority failed")
 	}
@@ -440,11 +440,11 @@ func TestENCR_AES_CBC_192(t *testing.T) {
 
 	// IKE Type
 	// transformID()
-	if encrType.transformID() != types.ENCR_AES_CBC {
+	if encrType.TransformID() != types.ENCR_AES_CBC {
 		t.Fatal("Transform ID not correct")
 	}
 	// getAttribute()
-	attrPresent, attrType, attrValue, byteAttrValue := encrType.getAttribute()
+	attrPresent, attrType, attrValue, byteAttrValue := encrType.GetAttribute()
 	if attrPresent != true {
 		t.Fatal("Attribute Present not correct")
 	}
@@ -459,11 +459,11 @@ func TestENCR_AES_CBC_192(t *testing.T) {
 	}
 	// setPriority()
 	originPriority := encrAESCBC192.priority
-	encrType.setPriority(0)
+	encrType.SetPriority(0)
 	if encrAESCBC192.priority != 0 {
 		t.Fatal("Set Priority failed")
 	}
-	encrType.setPriority(originPriority)
+	encrType.SetPriority(originPriority)
 	if encrAESCBC192.priority != originPriority {
 		t.Fatal("Set Priority failed")
 	}
@@ -523,11 +523,11 @@ func TestENCR_AES_CBC_192(t *testing.T) {
 
 	// Kernel Type
 	// transformID()
-	if encrKType.transformID() != types.ENCR_AES_CBC {
+	if encrKType.TransformID() != types.ENCR_AES_CBC {
 		t.Fatal("Transform ID not correct")
 	}
 	// getAttribute()
-	attrPresent, attrType, attrValue, byteAttrValue = encrKType.getAttribute()
+	attrPresent, attrType, attrValue, byteAttrValue = encrKType.GetAttribute()
 	if attrPresent != true {
 		t.Fatal("Attribute Present not correct")
 	}
@@ -542,11 +542,11 @@ func TestENCR_AES_CBC_192(t *testing.T) {
 	}
 	// setPriority()
 	originPriority = encrKAESCBC192.priority
-	encrKType.setPriority(0)
+	encrKType.SetPriority(0)
 	if encrKAESCBC192.priority != 0 {
 		t.Fatal("Set Priority failed")
 	}
-	encrKType.setPriority(originPriority)
+	encrKType.SetPriority(originPriority)
 	if encrKAESCBC192.priority != originPriority {
 		t.Fatal("Set Priority failed")
 	}
@@ -573,11 +573,11 @@ func TestENCR_AES_CBC_256(t *testing.T) {
 
 	// IKE Type
 	// transformID()
-	if encrType.transformID() != types.ENCR_AES_CBC {
+	if encrType.TransformID() != types.ENCR_AES_CBC {
 		t.Fatal("Transform ID not correct")
 	}
 	// getAttribute()
-	attrPresent, attrType, attrValue, byteAttrValue := encrType.getAttribute()
+	attrPresent, attrType, attrValue, byteAttrValue := encrType.GetAttribute()
 	if attrPresent != true {
 		t.Fatal("Attribute Present not correct")
 	}
@@ -592,11 +592,11 @@ func TestENCR_AES_CBC_256(t *testing.T) {
 	}
 	// setPriority()
 	originPriority := encrAESCBC256.priority
-	encrType.setPriority(0)
+	encrType.SetPriority(0)
 	if encrAESCBC256.priority != 0 {
 		t.Fatal("Set Priority failed")
 	}
-	encrType.setPriority(originPriority)
+	encrType.SetPriority(originPriority)
 	if encrAESCBC256.priority != originPriority {
 		t.Fatal("Set Priority failed")
 	}
@@ -656,11 +656,11 @@ func TestENCR_AES_CBC_256(t *testing.T) {
 
 	// Kernel Type
 	// transformID()
-	if encrKType.transformID() != types.ENCR_AES_CBC {
+	if encrKType.TransformID() != types.ENCR_AES_CBC {
 		t.Fatal("Transform ID not correct")
 	}
 	// getAttribute()
-	attrPresent, attrType, attrValue, byteAttrValue = encrKType.getAttribute()
+	attrPresent, attrType, attrValue, byteAttrValue = encrKType.GetAttribute()
 	if attrPresent != true {
 		t.Fatal("Attribute Present not correct")
 	}
@@ -675,11 +675,11 @@ func TestENCR_AES_CBC_256(t *testing.T) {
 	}
 	// setPriority()
 	originPriority = encrKAESCBC256.priority
-	encrKType.setPriority(0)
+	encrKType.SetPriority(0)
 	if encrKAESCBC256.priority != 0 {
 		t.Fatal("Set Priority failed")
 	}
-	encrKType.setPriority(originPriority)
+	encrKType.SetPriority(originPriority)
 	if encrKAESCBC256.priority != originPriority {
 		t.Fatal("Set Priority failed")
 	}

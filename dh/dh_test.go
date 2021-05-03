@@ -138,14 +138,14 @@ func TestDecodeTransform(t *testing.T) {
 func TestDH_1024_BIT_MODP(t *testing.T) {
 	// Get type using StrToType
 	dhType := StrToType(String_DH_1024_BIT_MODP)
-	dh1024modpgroup := dhType.(*DH_1024_BIT_MODP)
+	dh1024modpgroup := dhType.(*DH_MODP)
 
 	// transformID()
-	if dhType.transformID() != types.DH_1024_BIT_MODP {
+	if dhType.TransformID() != types.DH_1024_BIT_MODP {
 		t.Fatal("Transform ID not correct")
 	}
 	// getAttribute()
-	attrPresent, attrType, attrValue, byteAttrValue := dhType.getAttribute()
+	attrPresent, attrType, attrValue, byteAttrValue := dhType.GetAttribute()
 	if attrPresent != false {
 		t.Fatal("Attribute Present not correct")
 	}
@@ -160,11 +160,11 @@ func TestDH_1024_BIT_MODP(t *testing.T) {
 	}
 	// setPriority()
 	originPriority := dh1024modpgroup.priority
-	dhType.setPriority(0)
+	dhType.SetPriority(0)
 	if dh1024modpgroup.priority != 0 {
 		t.Fatal("Set Priority failed")
 	}
-	dhType.setPriority(originPriority)
+	dhType.SetPriority(originPriority)
 	if dh1024modpgroup.priority != originPriority {
 		t.Fatal("Set Priority failed")
 	}
@@ -243,14 +243,14 @@ func TestDH_1024_BIT_MODP(t *testing.T) {
 func TestDH_2048_BIT_MODP(t *testing.T) {
 	// Get type using StrToType
 	dhType := StrToType(String_DH_2048_BIT_MODP)
-	dh2048modpgroup := dhType.(*DH_2048_BIT_MODP)
+	dh2048modpgroup := dhType.(*DH_MODP)
 
 	// transformID()
-	if dhType.transformID() != types.DH_2048_BIT_MODP {
+	if dhType.TransformID() != types.DH_2048_BIT_MODP {
 		t.Fatal("Transform ID not correct")
 	}
 	// getAttribute()
-	attrPresent, attrType, attrValue, byteAttrValue := dhType.getAttribute()
+	attrPresent, attrType, attrValue, byteAttrValue := dhType.GetAttribute()
 	if attrPresent != false {
 		t.Fatal("Attribute Present not correct")
 	}
@@ -265,11 +265,11 @@ func TestDH_2048_BIT_MODP(t *testing.T) {
 	}
 	// setPriority()
 	originPriority := dh2048modpgroup.priority
-	dhType.setPriority(0)
+	dhType.SetPriority(0)
 	if dh2048modpgroup.priority != 0 {
 		t.Fatal("Set Priority failed")
 	}
-	dhType.setPriority(originPriority)
+	dhType.SetPriority(originPriority)
 	if dh2048modpgroup.priority != originPriority {
 		t.Fatal("Set Priority failed")
 	}

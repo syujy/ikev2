@@ -20,8 +20,8 @@ func init() {
 	// ESN Types
 	esnTypes = make(map[string]ESNType)
 
-	esnTypes[String_ESN_ENABLE] = &ESN_ENABLE{}
-	esnTypes[String_ESN_DISABLE] = &ESN_DISABLE{}
+	esnTypes[String_ESN_ENABLE] = NewType_ESN_ENABLE()
+	esnTypes[String_ESN_DISABLE] = NewType_ESN_DISABLE()
 
 	// Default Priority
 	priority := []string{
@@ -32,7 +32,7 @@ func init() {
 	// Set Priority
 	for i, s := range priority {
 		if esnType, ok := esnTypes[s]; ok {
-			esnType.setPriority(uint32(i))
+			esnType.SetPriority(uint32(i))
 		} else {
 			panic("IKE ESN failed to init. Error: No such ESN implementation.")
 		}
@@ -55,7 +55,7 @@ func SetPriority(algolist map[string]uint32) error {
 	}
 	// set priority
 	for algo, priority := range algolist {
-		esnTypes[algo].setPriority(uint32(priority))
+		esnTypes[algo].SetPriority(uint32(priority))
 	}
 	return nil
 }
@@ -99,8 +99,8 @@ func ToTransform(esnType ESNType) *message.Transform {
 	}
 	t := new(message.Transform)
 	t.TransformType = types.TypeExtendedSequenceNumbers
-	t.TransformID = esnType.transformID()
-	t.AttributePresent, t.AttributeType, t.AttributeValue, t.VariableLengthAttributeValue = esnType.getAttribute()
+	t.TransformID = esnType.TransformID()
+	t.AttributePresent, t.AttributeType, t.AttributeValue, t.VariableLengthAttributeValue = esnType.GetAttribute()
 	if t.AttributePresent && t.VariableLengthAttributeValue == nil {
 		t.AttributeFormat = types.AttributeFormatUseTV
 	}
@@ -108,9 +108,66 @@ func ToTransform(esnType ESNType) *message.Transform {
 }
 
 type ESNType interface {
-	transformID() uint16
-	getAttribute() (bool, uint16, uint16, []byte)
-	setPriority(uint32)
+	TransformID() uint16
+	GetAttribute() (bool, uint16, uint16, []byte)
+	SetPriority(uint32)
 	Priority() uint32
 	Init() bool
+}
+
+const (
+	String_ESN_ENABLE  string = "ESN_ENABLE"
+	String_ESN_DISABLE string = "ESN_DISABLE"
+)
+
+var _ ESNType = &ESN{}
+
+type ESN struct {
+	transformID uint16
+	enabled     bool
+	priority    uint32
+}
+
+func (t *ESN) TransformID() uint16 {
+	return t.transformID
+}
+
+func (t *ESN) GetAttribute() (bool, uint16, uint16, []byte) {
+	return false, 0, 0, nil
+}
+
+func (t *ESN) SetPriority(priority uint32) {
+	t.priority = priority
+}
+
+func (t *ESN) Priority() uint32 {
+	return t.priority
+}
+
+func (t *ESN) Init() bool {
+	return t.enabled
+}
+
+// ESN_ENABLE
+func toString_ESN_ENABLE(attrType uint16, intValue uint16, bytesValue []byte) string {
+	return String_ESN_ENABLE
+}
+
+func NewType_ESN_ENABLE() *ESN {
+	return &ESN{
+		transformID: types.ESN_ENABLE,
+		enabled:     true,
+	}
+}
+
+// ESN_DISABLE
+func toString_ESN_DISABLE(attrType uint16, intValue uint16, bytesValue []byte) string {
+	return String_ESN_DISABLE
+}
+
+func NewType_ESN_DISABLE() *ESN {
+	return &ESN{
+		transformID: types.ESN_DISABLE,
+		enabled:     false,
+	}
 }

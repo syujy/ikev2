@@ -82,13 +82,16 @@ type IKESA struct {
 	prfInfo   prf.PRFType
 
 	// Security objects
-	Prf_d   hash.Hash      // used to derive key for child sa
-	Integ_i hash.Hash      // used by initiator for integrity checking
-	Integ_r hash.Hash      // used by responder for integrity checking
-	Encr_i  encr.IKECrypto // used by initiator for encrypting
-	Encr_r  encr.IKECrypto // used by responder for encrypting
-	Prf_i   hash.Hash      // used by initiator for IKE authentication
-	Prf_r   hash.Hash      // used by responder for IKE authentication
+	Prf_d   hash.Hash       // used to derive key for child sa
+	Integ_i hash.Hash       // used by initiator for integrity checking
+	Integ_r hash.Hash       // used by responder for integrity checking
+	Encr_i  types.IKECrypto // used by initiator for encrypting
+	Encr_r  types.IKECrypto // used by responder for encrypting
+	Prf_i   hash.Hash       // used by initiator for IKE authentication
+	Prf_r   hash.Hash       // used by responder for IKE authentication
+
+	// NAT detection
+	NATT bool
 }
 
 func (ikesa *IKESA) SelectProposal(proposal *message.Proposal) bool {

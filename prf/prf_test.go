@@ -137,14 +137,14 @@ func TestDecodeTransform(t *testing.T) {
 func TestPRF_HMAC_MD5(t *testing.T) {
 	// Get type using StrToType
 	prfType := StrToType(String_PRF_HMAC_MD5)
-	prfHMACMD5 := prfType.(*PRF_HMAC_MD5)
+	prfHMACMD5 := prfType.(*PRF_HMAC)
 
 	// transformID()
-	if prfType.transformID() != types.PRF_HMAC_MD5 {
+	if prfType.TransformID() != types.PRF_HMAC_MD5 {
 		t.Fatal("Transform ID not correct")
 	}
 	// getAttribute()
-	attrPresent, attrType, attrValue, byteAttrValue := prfType.getAttribute()
+	attrPresent, attrType, attrValue, byteAttrValue := prfType.GetAttribute()
 	if attrPresent != false {
 		t.Fatal("Attribute Present not correct")
 	}
@@ -159,11 +159,11 @@ func TestPRF_HMAC_MD5(t *testing.T) {
 	}
 	// setPriority()
 	originPriority := prfHMACMD5.priority
-	prfType.setPriority(0)
+	prfType.SetPriority(0)
 	if prfHMACMD5.priority != 0 {
 		t.Fatal("Set Priority failed")
 	}
-	prfType.setPriority(originPriority)
+	prfType.SetPriority(originPriority)
 	if prfHMACMD5.priority != originPriority {
 		t.Fatal("Set Priority failed")
 	}
@@ -198,14 +198,14 @@ func TestPRF_HMAC_MD5(t *testing.T) {
 func TestPRF_HMAC_SHA1(t *testing.T) {
 	// Get type using StrToType
 	prfType := StrToType(String_PRF_HMAC_SHA1)
-	prfHMACSHA1 := prfType.(*PRF_HMAC_SHA1)
+	prfHMACSHA1 := prfType.(*PRF_HMAC)
 
 	// transformID()
-	if prfType.transformID() != types.PRF_HMAC_SHA1 {
+	if prfType.TransformID() != types.PRF_HMAC_SHA1 {
 		t.Fatal("Transform ID not correct")
 	}
 	// getAttribute()
-	attrPresent, attrType, attrValue, byteAttrValue := prfType.getAttribute()
+	attrPresent, attrType, attrValue, byteAttrValue := prfType.GetAttribute()
 	if attrPresent != false {
 		t.Fatal("Attribute Present not correct")
 	}
@@ -220,11 +220,11 @@ func TestPRF_HMAC_SHA1(t *testing.T) {
 	}
 	// setPriority()
 	originPriority := prfHMACSHA1.priority
-	prfType.setPriority(0)
+	prfType.SetPriority(0)
 	if prfHMACSHA1.priority != 0 {
 		t.Fatal("Set Priority failed")
 	}
-	prfType.setPriority(originPriority)
+	prfType.SetPriority(originPriority)
 	if prfHMACSHA1.priority != originPriority {
 		t.Fatal("Set Priority failed")
 	}

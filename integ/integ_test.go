@@ -264,16 +264,16 @@ func TestAUTH_HMAC_MD5_96(t *testing.T) {
 	// Get type using StrToType
 	integType := StrToType(String_AUTH_HMAC_MD5_96)
 	integKType := StrToKType(String_AUTH_HMAC_MD5_96)
-	integHMACMD596 := integType.(*AUTH_HMAC_MD5_96)
-	integKHMACMD596 := integKType.(*AUTH_HMAC_MD5_96)
+	integHMACMD596 := integType.(*AUTH_HMAC)
+	integKHMACMD596 := integKType.(*AUTH_HMAC)
 
 	// IKE Type
 	// transformID()
-	if integType.transformID() != types.AUTH_HMAC_MD5_96 {
+	if integType.TransformID() != types.AUTH_HMAC_MD5_96 {
 		t.Fatal("Transform ID not correct")
 	}
 	// getAttribute()
-	attrPresent, attrType, attrValue, byteAttrValue := integType.getAttribute()
+	attrPresent, attrType, attrValue, byteAttrValue := integType.GetAttribute()
 	if attrPresent != false {
 		t.Fatal("Attribute Present not correct")
 	}
@@ -288,11 +288,11 @@ func TestAUTH_HMAC_MD5_96(t *testing.T) {
 	}
 	// setPriority()
 	originPriority := integHMACMD596.priority
-	integType.setPriority(0)
+	integType.SetPriority(0)
 	if integHMACMD596.priority != 0 {
 		t.Fatal("Set Priority failed")
 	}
-	integType.setPriority(originPriority)
+	integType.SetPriority(originPriority)
 	if integHMACMD596.priority != originPriority {
 		t.Fatal("Set Priority failed")
 	}
@@ -325,11 +325,11 @@ func TestAUTH_HMAC_MD5_96(t *testing.T) {
 
 	// Kernel Type
 	// transformID()
-	if integKType.transformID() != types.AUTH_HMAC_MD5_96 {
+	if integKType.TransformID() != types.AUTH_HMAC_MD5_96 {
 		t.Fatal("Transform ID not correct")
 	}
 	// getAttribute()
-	attrPresent, attrType, attrValue, byteAttrValue = integKType.getAttribute()
+	attrPresent, attrType, attrValue, byteAttrValue = integKType.GetAttribute()
 	if attrPresent != false {
 		t.Fatal("Attribute Present not correct")
 	}
@@ -344,11 +344,11 @@ func TestAUTH_HMAC_MD5_96(t *testing.T) {
 	}
 	// setPriority()
 	originPriority = integKHMACMD596.priority
-	integKType.setPriority(0)
+	integKType.SetPriority(0)
 	if integKHMACMD596.priority != 0 {
 		t.Fatal("Set Priority failed")
 	}
-	integKType.setPriority(originPriority)
+	integKType.SetPriority(originPriority)
 	if integKHMACMD596.priority != originPriority {
 		t.Fatal("Set Priority failed")
 	}
@@ -370,16 +370,16 @@ func TestAUTH_HMAC_SHA1_96(t *testing.T) {
 	// Get type using StrToType
 	integType := StrToType(String_AUTH_HMAC_SHA1_96)
 	integKType := StrToKType(String_AUTH_HMAC_SHA1_96)
-	integHMACSHA196 := integType.(*AUTH_HMAC_SHA1_96)
-	integKHMACSHA196 := integKType.(*AUTH_HMAC_SHA1_96)
+	integHMACSHA196 := integType.(*AUTH_HMAC)
+	integKHMACSHA196 := integKType.(*AUTH_HMAC)
 
 	// IKE Type
 	// transformID()
-	if integType.transformID() != types.AUTH_HMAC_SHA1_96 {
+	if integType.TransformID() != types.AUTH_HMAC_SHA1_96 {
 		t.Fatal("Transform ID not correct")
 	}
 	// getAttribute()
-	attrPresent, attrType, attrValue, byteAttrValue := integType.getAttribute()
+	attrPresent, attrType, attrValue, byteAttrValue := integType.GetAttribute()
 	if attrPresent != false {
 		t.Fatal("Attribute Present not correct")
 	}
@@ -394,11 +394,11 @@ func TestAUTH_HMAC_SHA1_96(t *testing.T) {
 	}
 	// setPriority()
 	originPriority := integHMACSHA196.priority
-	integType.setPriority(0)
+	integType.SetPriority(0)
 	if integHMACSHA196.priority != 0 {
 		t.Fatal("Set Priority failed")
 	}
-	integType.setPriority(originPriority)
+	integType.SetPriority(originPriority)
 	if integHMACSHA196.priority != originPriority {
 		t.Fatal("Set Priority failed")
 	}
@@ -431,11 +431,11 @@ func TestAUTH_HMAC_SHA1_96(t *testing.T) {
 
 	// Kernel Type
 	// transformID()
-	if integKType.transformID() != types.AUTH_HMAC_SHA1_96 {
+	if integKType.TransformID() != types.AUTH_HMAC_SHA1_96 {
 		t.Fatal("Transform ID not correct")
 	}
 	// getAttribute()
-	attrPresent, attrType, attrValue, byteAttrValue = integKType.getAttribute()
+	attrPresent, attrType, attrValue, byteAttrValue = integKType.GetAttribute()
 	if attrPresent != false {
 		t.Fatal("Attribute Present not correct")
 	}
@@ -450,11 +450,11 @@ func TestAUTH_HMAC_SHA1_96(t *testing.T) {
 	}
 	// setPriority()
 	originPriority = integKHMACSHA196.priority
-	integKType.setPriority(0)
+	integKType.SetPriority(0)
 	if integKHMACSHA196.priority != 0 {
 		t.Fatal("Set Priority failed")
 	}
-	integKType.setPriority(originPriority)
+	integKType.SetPriority(originPriority)
 	if integKHMACSHA196.priority != originPriority {
 		t.Fatal("Set Priority failed")
 	}

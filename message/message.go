@@ -28,17 +28,11 @@ func (ikeMessage *IKEMessage) Encode() ([]byte, error) {
 	ikeMessageData[19] = ikeMessage.Flags
 	binary.BigEndian.PutUint32(ikeMessageData[20:24], ikeMessage.MessageID)
 
-	if len(ikeMessage.Payloads) > 0 {
-		ikeMessageData[16] = byte(ikeMessage.Payloads[0].Type())
-	} else {
-		ikeMessageData[16] = types.NoNext
-	}
-
-	ikeMessagePayloadData, err := ikeMessage.Payloads.Encode()
+	nextPayload, ikeMessagePayloadData, err := ikeMessage.Payloads.Encode()
 	if err != nil {
 		return nil, fmt.Errorf("Encode(): EncodePayload failed: %+v", err)
 	}
-
+	ikeMessageData[16] = nextPayload
 	ikeMessageData = append(ikeMessageData, ikeMessagePayloadData...)
 	binary.BigEndian.PutUint32(ikeMessageData[24:28], uint32(len(ikeMessageData)))
 
@@ -83,7 +77,11 @@ func (ikeMessage *IKEMessage) Decode(rawData []byte) error {
 
 type IKEPayloadContainer []IKEPayload
 
-func (container *IKEPayloadContainer) Encode() ([]byte, error) {
+func (container *IKEPayloadContainer) Encode() (uint8, []byte, error) {
+	if len(*container) == 0 {
+		return types.NoNext, nil, errors.New("No payload in the container.")
+	}
+
 	ikeMessagePayloadData := make([]byte, 0)
 
 	for index, payload := range *container {
@@ -100,7 +98,7 @@ func (container *IKEPayloadContainer) Encode() ([]byte, error) {
 
 		data, err := payload.marshal()
 		if err != nil {
-			return nil, fmt.Errorf("EncodePayload(): Failed to marshal payload: %+v", err)
+			return 0, nil, fmt.Errorf("EncodePayload(): Failed to marshal payload: %+v", err)
 		}
 
 		payloadData = append(payloadData, data...)
@@ -109,7 +107,7 @@ func (container *IKEPayloadContainer) Encode() ([]byte, error) {
 		ikeMessagePayloadData = append(ikeMessagePayloadData, payloadData...)
 	}
 
-	return ikeMessagePayloadData, nil
+	return uint8((*container)[0].Type()), ikeMessagePayloadData, nil
 }
 
 func (container *IKEPayloadContainer) Decode(nextPayload uint8, rawData []byte) error {
