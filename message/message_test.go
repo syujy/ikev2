@@ -298,14 +298,12 @@ func TestEncodeDecode(t *testing.T) {
 
 	testSK := new(Encrypted)
 
-	testSK.NextPayload = 33
-
 	ikePayload := IKEPayloadContainer{
 		testSA,
 		testAuth,
 	}
 
-	ikePayloadDataForSK, retErr := ikePayload.Encode()
+	nextPayload, ikePayloadDataForSK, retErr := ikePayload.Encode()
 	if retErr != nil {
 		t.Fatalf("EncodePayload failed: %+v", retErr)
 	}
@@ -337,6 +335,7 @@ func TestEncodeDecode(t *testing.T) {
 	mode := cipher.NewCBCEncrypter(block, iv)
 	mode.CryptBlocks(cipherText[aes.BlockSize:], ikePayloadDataForSK)
 
+	testSK.NextPayload = nextPayload
 	testSK.EncryptedData = cipherText
 
 	testPacket.Payloads = append(testPacket.Payloads, testSK)

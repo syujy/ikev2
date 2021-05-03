@@ -23,14 +23,8 @@ func init() {
 	// INTEG Types
 	integTypes = make(map[string]INTEGType)
 
-	integTypes[String_AUTH_HMAC_MD5_96] = &AUTH_HMAC_MD5_96{
-		keyLength:    16,
-		outputLength: 12,
-	}
-	integTypes[String_AUTH_HMAC_SHA1_96] = &AUTH_HMAC_SHA1_96{
-		keyLength:    20,
-		outputLength: 12,
-	}
+	integTypes[String_AUTH_HMAC_MD5_96] = NewType_AUTH_HMAC_MD5_96()
+	integTypes[String_AUTH_HMAC_SHA1_96] = NewType_AUTH_HMAC_SHA1_96()
 
 	// Default Priority
 	priority := []string{
@@ -41,7 +35,7 @@ func init() {
 	// Set Priority
 	for i, s := range priority {
 		if integType, ok := integTypes[s]; ok {
-			integType.setPriority(uint32(i))
+			integType.SetPriority(uint32(i))
 		} else {
 			panic("IKE INTEG failed to init. Error: No such INTEG implementation.")
 		}
@@ -50,20 +44,14 @@ func init() {
 	// INTEG Kernel Types
 	integKTypes = make(map[string]INTEGKType)
 
-	integKTypes[String_AUTH_HMAC_MD5_96] = &AUTH_HMAC_MD5_96{
-		keyLength:    16,
-		outputLength: 12,
-	}
-	integKTypes[String_AUTH_HMAC_SHA1_96] = &AUTH_HMAC_SHA1_96{
-		keyLength:    20,
-		outputLength: 12,
-	}
+	integKTypes[String_AUTH_HMAC_MD5_96] = NewType_AUTH_HMAC_MD5_96()
+	integKTypes[String_AUTH_HMAC_SHA1_96] = NewType_AUTH_HMAC_SHA1_96()
 
 	// INTEG Kernel Priority same as above
 	// Set Priority
 	for i, s := range priority {
 		if integKType, ok := integKTypes[s]; ok {
-			integKType.setPriority(uint32(i))
+			integKType.SetPriority(uint32(i))
 		} else {
 			panic("IKE INTEG failed to init. Error: No such INTEG implementation.")
 		}
@@ -93,7 +81,7 @@ func SetPriority(algolist map[string]uint32) error {
 	}
 	// set priority
 	for algo, priority := range algolist {
-		integTypes[algo].setPriority(uint32(priority))
+		integTypes[algo].SetPriority(uint32(priority))
 	}
 	return nil
 }
@@ -107,7 +95,7 @@ func SetKPriority(algolist []string) error {
 	}
 	// set priority
 	for i, algo := range algolist {
-		integKTypes[algo].setPriority(uint32(i))
+		integKTypes[algo].SetPriority(uint32(i))
 	}
 	return nil
 }
@@ -167,8 +155,8 @@ func ToTransform(integType INTEGType) *message.Transform {
 	}
 	t := new(message.Transform)
 	t.TransformType = types.TypeIntegrityAlgorithm
-	t.TransformID = integType.transformID()
-	t.AttributePresent, t.AttributeType, t.AttributeValue, t.VariableLengthAttributeValue = integType.getAttribute()
+	t.TransformID = integType.TransformID()
+	t.AttributePresent, t.AttributeType, t.AttributeValue, t.VariableLengthAttributeValue = integType.GetAttribute()
 	if t.AttributePresent && t.VariableLengthAttributeValue == nil {
 		t.AttributeFormat = 1 // TV
 	}
@@ -198,8 +186,8 @@ func ToTransformChildSA(integKType INTEGKType) *message.Transform {
 	}
 	t := new(message.Transform)
 	t.TransformType = types.TypeIntegrityAlgorithm
-	t.TransformID = integKType.transformID()
-	t.AttributePresent, t.AttributeType, t.AttributeValue, t.VariableLengthAttributeValue = integKType.getAttribute()
+	t.TransformID = integKType.TransformID()
+	t.AttributePresent, t.AttributeType, t.AttributeValue, t.VariableLengthAttributeValue = integKType.GetAttribute()
 	if t.AttributePresent && t.VariableLengthAttributeValue == nil {
 		t.AttributeFormat = types.AttributeFormatUseTV
 	}
@@ -207,9 +195,9 @@ func ToTransformChildSA(integKType INTEGKType) *message.Transform {
 }
 
 type INTEGType interface {
-	transformID() uint16
-	getAttribute() (bool, uint16, uint16, []byte)
-	setPriority(uint32)
+	TransformID() uint16
+	GetAttribute() (bool, uint16, uint16, []byte)
+	SetPriority(uint32)
 	Priority() uint32
 	GetKeyLength() int
 	GetOutputLength() int
@@ -217,9 +205,9 @@ type INTEGType interface {
 }
 
 type INTEGKType interface {
-	transformID() uint16
-	getAttribute() (bool, uint16, uint16, []byte)
-	setPriority(uint32)
+	TransformID() uint16
+	GetAttribute() (bool, uint16, uint16, []byte)
+	SetPriority(uint32)
 	Priority() uint32
 	GetKeyLength() int
 	XFRMString() string

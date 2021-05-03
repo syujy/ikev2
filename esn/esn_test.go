@@ -137,14 +137,14 @@ func TestDecodeTransform(t *testing.T) {
 func TestESN_ENABLE(t *testing.T) {
 	// Get type using StrToType
 	esnType := StrToType(String_ESN_ENABLE)
-	esnEnable := esnType.(*ESN_ENABLE)
+	esnEnable := esnType.(*ESN)
 
 	// transformID()
-	if esnType.transformID() != types.ESN_ENABLE {
+	if esnType.TransformID() != types.ESN_ENABLE {
 		t.Fatal("Transform ID not correct")
 	}
 	// getAttribute()
-	attrPresent, attrType, attrValue, byteAttrValue := esnType.getAttribute()
+	attrPresent, attrType, attrValue, byteAttrValue := esnType.GetAttribute()
 	if attrPresent != false {
 		t.Fatal("Attribute Present not correct")
 	}
@@ -159,11 +159,11 @@ func TestESN_ENABLE(t *testing.T) {
 	}
 	// setPriority()
 	originPriority := esnEnable.priority
-	esnType.setPriority(0)
+	esnType.SetPriority(0)
 	if esnEnable.priority != 0 {
 		t.Fatal("Set Priority failed")
 	}
-	esnType.setPriority(originPriority)
+	esnType.SetPriority(originPriority)
 	if esnEnable.priority != originPriority {
 		t.Fatal("Set Priority failed")
 	}
@@ -180,14 +180,14 @@ func TestESN_ENABLE(t *testing.T) {
 func TestESN_DISABLE(t *testing.T) {
 	// Get type using StrToType
 	esnType := StrToType(String_ESN_DISABLE)
-	esnDisable := esnType.(*ESN_DISABLE)
+	esnDisable := esnType.(*ESN)
 
 	// transformID()
-	if esnType.transformID() != types.ESN_DISABLE {
+	if esnType.TransformID() != types.ESN_DISABLE {
 		t.Fatal("Transform ID not correct")
 	}
 	// getAttribute()
-	attrPresent, attrType, attrValue, byteAttrValue := esnType.getAttribute()
+	attrPresent, attrType, attrValue, byteAttrValue := esnType.GetAttribute()
 	if attrPresent != false {
 		t.Fatal("Attribute Present not correct")
 	}
@@ -202,11 +202,11 @@ func TestESN_DISABLE(t *testing.T) {
 	}
 	// setPriority()
 	originPriority := esnDisable.priority
-	esnType.setPriority(0)
+	esnType.SetPriority(0)
 	if esnDisable.priority != 0 {
 		t.Fatal("Set Priority failed")
 	}
-	esnType.setPriority(originPriority)
+	esnType.SetPriority(originPriority)
 	if esnDisable.priority != originPriority {
 		t.Fatal("Set Priority failed")
 	}

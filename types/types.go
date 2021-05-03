@@ -291,3 +291,15 @@ const (
 	Role_Initiator = iota
 	Role_Responder
 )
+
+// kernel, socket, connection
+const (
+	OPT_UDP_ENCAP             = 100
+	OPTVAL_UDP_ENCAP_ESPINUDP = 2
+)
+
+// interface
+type IKECrypto interface {
+	Encrypt(plainText []byte) ([]byte, error)
+	Decrypt(cipherText []byte) ([]byte, error)
+}

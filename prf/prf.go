@@ -21,14 +21,8 @@ func init() {
 	// PRF Types
 	prfTypes = make(map[string]PRFType)
 
-	prfTypes[String_PRF_HMAC_MD5] = &PRF_HMAC_MD5{
-		keyLength:    16,
-		outputLength: 16,
-	}
-	prfTypes[String_PRF_HMAC_SHA1] = &PRF_HMAC_SHA1{
-		keyLength:    20,
-		outputLength: 20,
-	}
+	prfTypes[String_PRF_HMAC_MD5] = NewType_PRF_HMAC_MD5()
+	prfTypes[String_PRF_HMAC_SHA1] = NewType_PRF_HMAC_SHA1()
 
 	// Default Priority
 	priority := []string{
@@ -39,7 +33,7 @@ func init() {
 	// Set Priority
 	for i, s := range priority {
 		if prfType, ok := prfTypes[s]; ok {
-			prfType.setPriority(uint32(i))
+			prfType.SetPriority(uint32(i))
 		} else {
 			panic("IKE PRF failed to init. Error: No such PRF implementation.")
 		}
@@ -62,7 +56,7 @@ func SetPriority(algolist map[string]uint32) error {
 	}
 	// set priority
 	for algo, priority := range algolist {
-		prfTypes[algo].setPriority(uint32(priority))
+		prfTypes[algo].SetPriority(uint32(priority))
 	}
 	return nil
 }
@@ -106,8 +100,8 @@ func ToTransform(prfType PRFType) *message.Transform {
 	}
 	t := new(message.Transform)
 	t.TransformType = types.TypePseudorandomFunction
-	t.TransformID = prfType.transformID()
-	t.AttributePresent, t.AttributeType, t.AttributeValue, t.VariableLengthAttributeValue = prfType.getAttribute()
+	t.TransformID = prfType.TransformID()
+	t.AttributePresent, t.AttributeType, t.AttributeValue, t.VariableLengthAttributeValue = prfType.GetAttribute()
 	if t.AttributePresent && t.VariableLengthAttributeValue == nil {
 		t.AttributeFormat = types.AttributeFormatUseTV
 	}
@@ -115,9 +109,9 @@ func ToTransform(prfType PRFType) *message.Transform {
 }
 
 type PRFType interface {
-	transformID() uint16
-	getAttribute() (bool, uint16, uint16, []byte)
-	setPriority(uint32)
+	TransformID() uint16
+	GetAttribute() (bool, uint16, uint16, []byte)
+	SetPriority(uint32)
 	Priority() uint32
 	GetKeyLength() int
 	GetOutputLength() int

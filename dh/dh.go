@@ -21,30 +21,18 @@ func init() {
 	// DH Types
 	dhTypes = make(map[string]DHType)
 
-	var factor, generator *big.Int
-
 	// Group 2: DH_1024_BIT_MODP
-	factor, ok := new(big.Int).SetString(group2PrimeString, 16)
-	if !ok {
-		panic("IKE Diffie Hellman Group failed to init. Error: Setting big number.")
-	}
-	generator = new(big.Int).SetUint64(group2Generator)
-	dhTypes[String_DH_1024_BIT_MODP] = &DH_1024_BIT_MODP{
-		factor:            factor,
-		generator:         generator,
-		factorBytesLength: len(factor.Bytes()),
+	if dhType, err := NewType_DH_1024_BIT_MODP(); err != nil {
+		panic(fmt.Errorf("IKE Diffie Hellman Group failed to init: %+v", err))
+	} else {
+		dhTypes[String_DH_1024_BIT_MODP] = dhType
 	}
 
 	// Group 14: DH_2048_BIT_MODP
-	factor, ok = new(big.Int).SetString(group14PrimeString, 16)
-	if !ok {
-		panic("IKE Diffie Hellman Group failed to init. Error: Setting big number.")
-	}
-	generator = new(big.Int).SetUint64(group14Generator)
-	dhTypes[String_DH_2048_BIT_MODP] = &DH_2048_BIT_MODP{
-		factor:            factor,
-		generator:         generator,
-		factorBytesLength: len(factor.Bytes()),
+	if dhType, err := NewType_DH_2048_BIT_MODP(); err != nil {
+		panic(fmt.Errorf("IKE Diffie Hellman Group failed to init: %+v", err))
+	} else {
+		dhTypes[String_DH_2048_BIT_MODP] = dhType
 	}
 
 	// Default Priority
@@ -56,7 +44,7 @@ func init() {
 	// Set Priority
 	for i, s := range priority {
 		if dhType, ok := dhTypes[s]; ok {
-			dhType.setPriority(uint32(i))
+			dhType.SetPriority(uint32(i))
 		} else {
 			panic("IKE Diffie Hellman Group failed to init. Error: No such DH group implementation.")
 		}
@@ -79,9 +67,17 @@ func SetPriority(algolist map[string]uint32) error {
 	}
 	// set priority
 	for algo, priority := range algolist {
-		dhTypes[algo].setPriority(uint32(priority))
+		dhTypes[algo].SetPriority(uint32(priority))
 	}
 	return nil
+}
+
+func GetType(group uint16) DHType {
+	if f, ok := dhString[group]; ok {
+		return dhTypes[f(0, 0, nil)]
+	} else {
+		return nil
+	}
 }
 
 func StrToType(algo string) DHType {
@@ -123,8 +119,8 @@ func ToTransform(dhType DHType) *message.Transform {
 	}
 	t := new(message.Transform)
 	t.TransformType = types.TypeDiffieHellmanGroup
-	t.TransformID = dhType.transformID()
-	t.AttributePresent, t.AttributeType, t.AttributeValue, t.VariableLengthAttributeValue = dhType.getAttribute()
+	t.TransformID = dhType.TransformID()
+	t.AttributePresent, t.AttributeType, t.AttributeValue, t.VariableLengthAttributeValue = dhType.GetAttribute()
 	if t.AttributePresent && t.VariableLengthAttributeValue == nil {
 		t.AttributeFormat = types.AttributeFormatUseTV
 	}
@@ -132,9 +128,9 @@ func ToTransform(dhType DHType) *message.Transform {
 }
 
 type DHType interface {
-	transformID() uint16
-	getAttribute() (bool, uint16, uint16, []byte)
-	setPriority(uint32)
+	TransformID() uint16
+	GetAttribute() (bool, uint16, uint16, []byte)
+	SetPriority(uint32)
 	Priority() uint32
 	GetSharedKey(secret, peerPublicValue *big.Int) []byte
 	GetPublicValue(secret *big.Int) []byte

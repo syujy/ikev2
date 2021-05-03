@@ -2,22 +2,11 @@ package message
 
 import (
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
 
-	"bitbucket.org/_syujy/ike/internal/logger"
 	"bitbucket.org/_syujy/ike/types"
-
-	"github.com/sirupsen/logrus"
 )
-
-// Log
-var msgLog *logrus.Entry
-
-func init() {
-	msgLog = logger.MsgLog
-}
 
 type IKEMessage struct {
 	InitiatorSPI uint64
@@ -30,8 +19,6 @@ type IKEMessage struct {
 }
 
 func (ikeMessage *IKEMessage) Encode() ([]byte, error) {
-	msgLog.Info("Encoding IKE message")
-
 	ikeMessageData := make([]byte, 28)
 
 	binary.BigEndian.PutUint64(ikeMessageData[0:8], ikeMessage.InitiatorSPI)
@@ -41,22 +28,13 @@ func (ikeMessage *IKEMessage) Encode() ([]byte, error) {
 	ikeMessageData[19] = ikeMessage.Flags
 	binary.BigEndian.PutUint32(ikeMessageData[20:24], ikeMessage.MessageID)
 
-	if len(ikeMessage.Payloads) > 0 {
-		ikeMessageData[16] = byte(ikeMessage.Payloads[0].Type())
-	} else {
-		ikeMessageData[16] = types.NoNext
-	}
-
-	ikeMessagePayloadData, err := ikeMessage.Payloads.Encode()
+	nextPayload, ikeMessagePayloadData, err := ikeMessage.Payloads.Encode()
 	if err != nil {
 		return nil, fmt.Errorf("Encode(): EncodePayload failed: %+v", err)
 	}
-
+	ikeMessageData[16] = nextPayload
 	ikeMessageData = append(ikeMessageData, ikeMessagePayloadData...)
 	binary.BigEndian.PutUint32(ikeMessageData[24:28], uint32(len(ikeMessageData)))
-
-	msgLog.Tracef("Encoded %d bytes", len(ikeMessageData))
-	msgLog.Tracef("IKE message data:\n%s", hex.Dump(ikeMessageData))
 
 	return ikeMessageData, nil
 }
@@ -64,8 +42,6 @@ func (ikeMessage *IKEMessage) Encode() ([]byte, error) {
 func (ikeMessage *IKEMessage) Decode(rawData []byte) error {
 	// IKE message packet format this implementation referenced is
 	// defined in RFC 7296, Section 3.1
-	msgLog.Info("Decoding IKE message")
-	msgLog.Tracef("Received IKE message:\n%s", hex.Dump(rawData))
 
 	// bounds checking
 	if len(rawData) < 28 {
@@ -101,8 +77,10 @@ func (ikeMessage *IKEMessage) Decode(rawData []byte) error {
 
 type IKEPayloadContainer []IKEPayload
 
-func (container *IKEPayloadContainer) Encode() ([]byte, error) {
-	msgLog.Info("Encoding IKE payloads")
+func (container *IKEPayloadContainer) Encode() (uint8, []byte, error) {
+	if len(*container) == 0 {
+		return types.NoNext, nil, errors.New("No payload in the container.")
+	}
 
 	ikeMessagePayloadData := make([]byte, 0)
 
@@ -120,7 +98,7 @@ func (container *IKEPayloadContainer) Encode() ([]byte, error) {
 
 		data, err := payload.marshal()
 		if err != nil {
-			return nil, fmt.Errorf("EncodePayload(): Failed to marshal payload: %+v", err)
+			return 0, nil, fmt.Errorf("EncodePayload(): Failed to marshal payload: %+v", err)
 		}
 
 		payloadData = append(payloadData, data...)
@@ -129,15 +107,12 @@ func (container *IKEPayloadContainer) Encode() ([]byte, error) {
 		ikeMessagePayloadData = append(ikeMessagePayloadData, payloadData...)
 	}
 
-	return ikeMessagePayloadData, nil
+	return uint8((*container)[0].Type()), ikeMessagePayloadData, nil
 }
 
 func (container *IKEPayloadContainer) Decode(nextPayload uint8, rawData []byte) error {
-	msgLog.Info("Decoding IKE payloads")
-
 	for len(rawData) > 0 {
 		// bounds checking
-		msgLog.Trace("DecodePayload(): Decode 1 payload")
 		if len(rawData) < 4 {
 			return errors.New("DecodePayload(): No sufficient bytes to decode next payload")
 		}
@@ -258,8 +233,6 @@ type Transform struct {
 func (securityAssociation *SecurityAssociation) Type() types.IKEPayloadType { return types.TypeSA }
 
 func (securityAssociation *SecurityAssociation) marshal() ([]byte, error) {
-	msgLog.Info("[SecurityAssociation] marshal(): Start marshalling")
-
 	securityAssociationData := make([]byte, 0)
 
 	for proposalIndex, proposal := range securityAssociation.Proposals {
@@ -343,11 +316,7 @@ func (securityAssociation *SecurityAssociation) marshal() ([]byte, error) {
 }
 
 func (securityAssociation *SecurityAssociation) unmarshal(rawData []byte) error {
-	msgLog.Info("[SecurityAssociation] unmarshal(): Start unmarshalling received bytes")
-	msgLog.Tracef("[SecurityAssociation] unmarshal(): Payload length %d bytes", len(rawData))
-
 	for len(rawData) > 0 {
-		msgLog.Trace("[SecurityAssociation] unmarshal(): Unmarshal 1 proposal")
 		// bounds checking
 		if len(rawData) < 8 {
 			return errors.New("Proposal: No sufficient bytes to decode next proposal")
@@ -359,13 +328,6 @@ func (securityAssociation *SecurityAssociation) unmarshal(rawData []byte) error 
 		if len(rawData) < int(proposalLength) {
 			return errors.New("Proposal: The length of received message not matchs the length specified in header")
 		}
-
-		// Log whether this proposal is the last
-		if rawData[0] == 0 {
-			msgLog.Trace("[SecurityAssociation] This proposal is the last")
-		}
-		// Log the number of transform in the proposal
-		msgLog.Tracef("[SecurityAssociation] This proposal contained %d transform", rawData[7])
 
 		proposal := new(Proposal)
 		var transformData []byte
@@ -386,7 +348,6 @@ func (securityAssociation *SecurityAssociation) unmarshal(rawData []byte) error 
 
 		for len(transformData) > 0 {
 			// bounds checking
-			msgLog.Trace("[SecurityAssociation] unmarshal(): Unmarshal 1 transform")
 			if len(transformData) < 8 {
 				return errors.New("Transform: No sufficient bytes to decode next transform")
 			}
@@ -396,11 +357,6 @@ func (securityAssociation *SecurityAssociation) unmarshal(rawData []byte) error 
 			}
 			if len(transformData) < int(transformLength) {
 				return errors.New("Transform: The length of received message not matchs the length specified in header")
-			}
-
-			// Log whether this transform is the last
-			if transformData[0] == 0 {
-				msgLog.Trace("[SecurityAssociation] This transform is the last")
 			}
 
 			transform := new(Transform)
@@ -462,8 +418,6 @@ type KeyExchange struct {
 func (keyExchange *KeyExchange) Type() types.IKEPayloadType { return types.TypeKE }
 
 func (keyExchange *KeyExchange) marshal() ([]byte, error) {
-	msgLog.Info("[KeyExchange] marshal(): Start marshalling")
-
 	keyExchangeData := make([]byte, 4)
 
 	binary.BigEndian.PutUint16(keyExchangeData[0:2], keyExchange.DiffieHellmanGroup)
@@ -473,11 +427,7 @@ func (keyExchange *KeyExchange) marshal() ([]byte, error) {
 }
 
 func (keyExchange *KeyExchange) unmarshal(rawData []byte) error {
-	msgLog.Info("[KeyExchange] unmarshal(): Start unmarshalling received bytes")
-	msgLog.Tracef("[KeyExchange] unmarshal(): Payload length %d bytes", len(rawData))
-
 	if len(rawData) > 0 {
-		msgLog.Trace("[KeyExchange] unmarshal(): Unmarshal 1 key exchange data")
 		// bounds checking
 		if len(rawData) <= 4 {
 			return errors.New("KeyExchange: No sufficient bytes to decode next key exchange data")
@@ -502,8 +452,6 @@ type IdentificationInitiator struct {
 func (identification *IdentificationInitiator) Type() types.IKEPayloadType { return types.TypeIDi }
 
 func (identification *IdentificationInitiator) marshal() ([]byte, error) {
-	msgLog.Info("[Identification] marshal(): Start marshalling")
-
 	identificationData := make([]byte, 4)
 
 	identificationData[0] = identification.IDType
@@ -513,11 +461,7 @@ func (identification *IdentificationInitiator) marshal() ([]byte, error) {
 }
 
 func (identification *IdentificationInitiator) unmarshal(rawData []byte) error {
-	msgLog.Info("[Identification] unmarshal(): Start unmarshalling received bytes")
-	msgLog.Tracef("[Identification] unmarshal(): Payload length %d bytes", len(rawData))
-
 	if len(rawData) > 0 {
-		msgLog.Trace("[Identification] unmarshal(): Unmarshal 1 identification")
 		// bounds checking
 		if len(rawData) <= 4 {
 			return errors.New("Identification: No sufficient bytes to decode next identification")
@@ -542,8 +486,6 @@ type IdentificationResponder struct {
 func (identification *IdentificationResponder) Type() types.IKEPayloadType { return types.TypeIDr }
 
 func (identification *IdentificationResponder) marshal() ([]byte, error) {
-	msgLog.Info("[Identification] marshal(): Start marshalling")
-
 	identificationData := make([]byte, 4)
 
 	identificationData[0] = identification.IDType
@@ -553,11 +495,7 @@ func (identification *IdentificationResponder) marshal() ([]byte, error) {
 }
 
 func (identification *IdentificationResponder) unmarshal(rawData []byte) error {
-	msgLog.Info("[Identification] unmarshal(): Start unmarshalling received bytes")
-	msgLog.Tracef("[Identification] unmarshal(): Payload length %d bytes", len(rawData))
-
 	if len(rawData) > 0 {
-		msgLog.Trace("[Identification] unmarshal(): Unmarshal 1 identification")
 		// bounds checking
 		if len(rawData) <= 4 {
 			return errors.New("Identification: No sufficient bytes to decode next identification")
@@ -582,8 +520,6 @@ type Certificate struct {
 func (certificate *Certificate) Type() types.IKEPayloadType { return types.TypeCERT }
 
 func (certificate *Certificate) marshal() ([]byte, error) {
-	msgLog.Info("[Certificate] marshal(): Start marshalling")
-
 	certificateData := make([]byte, 1)
 
 	certificateData[0] = certificate.CertificateEncoding
@@ -593,11 +529,7 @@ func (certificate *Certificate) marshal() ([]byte, error) {
 }
 
 func (certificate *Certificate) unmarshal(rawData []byte) error {
-	msgLog.Info("[Certificate] unmarshal(): Start unmarshalling received bytes")
-	msgLog.Tracef("[Certificate] unmarshal(): Payload length %d bytes", len(rawData))
-
 	if len(rawData) > 0 {
-		msgLog.Trace("[Certificate] unmarshal(): Unmarshal 1 certificate")
 		// bounds checking
 		if len(rawData) <= 1 {
 			return errors.New("Certificate: No sufficient bytes to decode next certificate")
@@ -622,8 +554,6 @@ type CertificateRequest struct {
 func (certificateRequest *CertificateRequest) Type() types.IKEPayloadType { return types.TypeCERTreq }
 
 func (certificateRequest *CertificateRequest) marshal() ([]byte, error) {
-	msgLog.Info("[CertificateRequest] marshal(): Start marshalling")
-
 	certificateRequestData := make([]byte, 1)
 
 	certificateRequestData[0] = certificateRequest.CertificateEncoding
@@ -633,11 +563,7 @@ func (certificateRequest *CertificateRequest) marshal() ([]byte, error) {
 }
 
 func (certificateRequest *CertificateRequest) unmarshal(rawData []byte) error {
-	msgLog.Info("[CertificateRequest] unmarshal(): Start unmarshalling received bytes")
-	msgLog.Tracef("[CertificateRequest] unmarshal(): Payload length %d bytes", len(rawData))
-
 	if len(rawData) > 0 {
-		msgLog.Trace("[CertificateRequest] unmarshal(): Unmarshal 1 certificate request")
 		// bounds checking
 		if len(rawData) <= 1 {
 			return errors.New("CertificateRequest: No sufficient bytes to decode next certificate request")
@@ -662,8 +588,6 @@ type Authentication struct {
 func (authentication *Authentication) Type() types.IKEPayloadType { return types.TypeAUTH }
 
 func (authentication *Authentication) marshal() ([]byte, error) {
-	msgLog.Info("[Authentication] marshal(): Start marshalling")
-
 	authenticationData := make([]byte, 4)
 
 	authenticationData[0] = authentication.AuthenticationMethod
@@ -673,11 +597,7 @@ func (authentication *Authentication) marshal() ([]byte, error) {
 }
 
 func (authentication *Authentication) unmarshal(rawData []byte) error {
-	msgLog.Info("[Authentication] unmarshal(): Start unmarshalling received bytes")
-	msgLog.Tracef("[Authentication] unmarshal(): Payload length %d bytes", len(rawData))
-
 	if len(rawData) > 0 {
-		msgLog.Trace("[Authentication] unmarshal(): Unmarshal 1 authentication")
 		// bounds checking
 		if len(rawData) <= 4 {
 			return errors.New("Authentication: No sufficient bytes to decode next authentication")
@@ -701,8 +621,6 @@ type Nonce struct {
 func (nonce *Nonce) Type() types.IKEPayloadType { return types.TypeNiNr }
 
 func (nonce *Nonce) marshal() ([]byte, error) {
-	msgLog.Info("[Nonce] marshal(): Start marshalling")
-
 	nonceData := make([]byte, 0)
 	nonceData = append(nonceData, nonce.NonceData...)
 
@@ -710,11 +628,7 @@ func (nonce *Nonce) marshal() ([]byte, error) {
 }
 
 func (nonce *Nonce) unmarshal(rawData []byte) error {
-	msgLog.Info("[Nonce] unmarshal(): Start unmarshalling received bytes")
-	msgLog.Tracef("[Nonce] unmarshal(): Payload length %d bytes", len(rawData))
-
 	if len(rawData) > 0 {
-		msgLog.Trace("[Nonce] unmarshal(): Unmarshal 1 nonce")
 		nonce.NonceData = append(nonce.NonceData, rawData...)
 	}
 
@@ -735,8 +649,6 @@ type Notification struct {
 func (notification *Notification) Type() types.IKEPayloadType { return types.TypeN }
 
 func (notification *Notification) marshal() ([]byte, error) {
-	msgLog.Info("[Notification] marshal(): Start marshalling")
-
 	notificationData := make([]byte, 4)
 
 	notificationData[0] = notification.ProtocolID
@@ -750,11 +662,7 @@ func (notification *Notification) marshal() ([]byte, error) {
 }
 
 func (notification *Notification) unmarshal(rawData []byte) error {
-	msgLog.Info("[Notification] unmarshal(): Start unmarshalling received bytes")
-	msgLog.Tracef("[Notification] unmarshal(): Payload length %d bytes", len(rawData))
-
 	if len(rawData) > 0 {
-		msgLog.Trace("[Notification] unmarshal(): Unmarshal 1 notification")
 		// bounds checking
 		if len(rawData) < 4 {
 			return errors.New("Notification: No sufficient bytes to decode next notification")
@@ -788,8 +696,6 @@ type Delete struct {
 func (delete *Delete) Type() types.IKEPayloadType { return types.TypeD }
 
 func (delete *Delete) marshal() ([]byte, error) {
-	msgLog.Info("[Delete] marshal(): Start marshalling")
-
 	if len(delete.SPIs) != (int(delete.SPISize) * int(delete.NumberOfSPI)) {
 		return nil, fmt.Errorf("Total bytes of all SPIs not correct")
 	}
@@ -806,11 +712,7 @@ func (delete *Delete) marshal() ([]byte, error) {
 }
 
 func (delete *Delete) unmarshal(rawData []byte) error {
-	msgLog.Info("[Delete] unmarshal(): Start unmarshalling received bytes")
-	msgLog.Tracef("[Delete] unmarshal(): Payload length %d bytes", len(rawData))
-
 	if len(rawData) > 0 {
-		msgLog.Trace("[Delete] unmarshal(): Unmarshal 1 delete")
 		// bounds checking
 		if len(rawData) <= 4 {
 			return errors.New("Delete: No sufficient bytes to decode next delete")
@@ -842,16 +744,11 @@ type VendorID struct {
 func (vendorID *VendorID) Type() types.IKEPayloadType { return types.TypeV }
 
 func (vendorID *VendorID) marshal() ([]byte, error) {
-	msgLog.Info("[VendorID] marshal(): Start marshalling")
 	return vendorID.VendorIDData, nil
 }
 
 func (vendorID *VendorID) unmarshal(rawData []byte) error {
-	msgLog.Info("[VendorID] unmarshal(): Start unmarshalling received bytes")
-	msgLog.Tracef("[VendorID] unmarshal(): Payload length %d bytes", len(rawData))
-
 	if len(rawData) > 0 {
-		msgLog.Trace("[VendorID] unmarshal(): Unmarshal 1 vendor ID")
 		vendorID.VendorIDData = append(vendorID.VendorIDData, rawData...)
 	}
 
@@ -880,8 +777,6 @@ type IndividualTrafficSelector struct {
 func (trafficSelector *TrafficSelectorInitiator) Type() types.IKEPayloadType { return types.TypeTSi }
 
 func (trafficSelector *TrafficSelectorInitiator) marshal() ([]byte, error) {
-	msgLog.Info("[TrafficSelector] marshal(): Start marshalling")
-
 	if len(trafficSelector.TrafficSelectors) > 0 {
 		trafficSelectorData := make([]byte, 4)
 		trafficSelectorData[0] = uint8(len(trafficSelector.TrafficSelectors))
@@ -890,7 +785,6 @@ func (trafficSelector *TrafficSelectorInitiator) marshal() ([]byte, error) {
 			if individualTrafficSelector.TSType == types.TS_IPV4_ADDR_RANGE {
 				// Address length checking
 				if len(individualTrafficSelector.StartAddress) != 4 {
-					msgLog.Errorf("Address length %d", len(individualTrafficSelector.StartAddress))
 					return nil, errors.New("TrafficSelector: Start IPv4 address length is not correct")
 				}
 				if len(individualTrafficSelector.EndAddress) != 4 {
@@ -944,11 +838,7 @@ func (trafficSelector *TrafficSelectorInitiator) marshal() ([]byte, error) {
 }
 
 func (trafficSelector *TrafficSelectorInitiator) unmarshal(rawData []byte) error {
-	msgLog.Info("[TrafficSelector] unmarshal(): Start unmarshalling received bytes")
-	msgLog.Tracef("[TrafficSelector] unmarshal(): Payload length %d bytes", len(rawData))
-
 	if len(rawData) > 0 {
-		msgLog.Trace("[TrafficSelector] unmarshal(): Unmarshal 1 traffic selector")
 		// bounds checking
 		if len(rawData) < 4 {
 			return errors.New("TrafficSelector: No sufficient bytes to get number of traffic selector in header")
@@ -1029,8 +919,6 @@ type TrafficSelectorResponder struct {
 func (trafficSelector *TrafficSelectorResponder) Type() types.IKEPayloadType { return types.TypeTSr }
 
 func (trafficSelector *TrafficSelectorResponder) marshal() ([]byte, error) {
-	msgLog.Info("[TrafficSelector] marshal(): Start marshalling")
-
 	if len(trafficSelector.TrafficSelectors) > 0 {
 		trafficSelectorData := make([]byte, 4)
 		trafficSelectorData[0] = uint8(len(trafficSelector.TrafficSelectors))
@@ -1092,11 +980,7 @@ func (trafficSelector *TrafficSelectorResponder) marshal() ([]byte, error) {
 }
 
 func (trafficSelector *TrafficSelectorResponder) unmarshal(rawData []byte) error {
-	msgLog.Info("[TrafficSelector] unmarshal(): Start unmarshalling received bytes")
-	msgLog.Tracef("[TrafficSelector] unmarshal(): Payload length %d bytes", len(rawData))
-
 	if len(rawData) > 0 {
-		msgLog.Trace("[TrafficSelector] unmarshal(): Unmarshal 1 traffic selector")
 		// bounds checking
 		if len(rawData) < 4 {
 			return errors.New("TrafficSelector: No sufficient bytes to get number of traffic selector in header")
@@ -1178,18 +1062,10 @@ type Encrypted struct {
 func (encrypted *Encrypted) Type() types.IKEPayloadType { return types.TypeSK }
 
 func (encrypted *Encrypted) marshal() ([]byte, error) {
-	msgLog.Info("[Encrypted] marshal(): Start marshalling")
-
-	if len(encrypted.EncryptedData) == 0 {
-		msgLog.Warn("[Encrypted] The encrypted data is empty")
-	}
-
 	return encrypted.EncryptedData, nil
 }
 
 func (encrypted *Encrypted) unmarshal(rawData []byte) error {
-	msgLog.Info("[Encrypted] unmarshal(): Start unmarshalling received bytes")
-	msgLog.Tracef("[Encrypted] unmarshal(): Payload length %d bytes", len(rawData))
 	encrypted.EncryptedData = append(encrypted.EncryptedData, rawData...)
 	return nil
 }
@@ -1213,8 +1089,6 @@ type IndividualConfigurationAttribute struct {
 func (configuration *Configuration) Type() types.IKEPayloadType { return types.TypeCP }
 
 func (configuration *Configuration) marshal() ([]byte, error) {
-	msgLog.Info("[Configuration] marshal(): Start marshalling")
-
 	configurationData := make([]byte, 4)
 
 	configurationData[0] = configuration.ConfigurationType
@@ -1234,11 +1108,7 @@ func (configuration *Configuration) marshal() ([]byte, error) {
 }
 
 func (configuration *Configuration) unmarshal(rawData []byte) error {
-	msgLog.Info("[Configuration] unmarshal(): Start unmarshalling received bytes")
-	msgLog.Tracef("[Configuration] unmarshal(): Payload length %d bytes", len(rawData))
-
 	if len(rawData) > 0 {
-		msgLog.Trace("[Configuration] unmarshal(): Unmarshal 1 configuration")
 		// bounds checking
 		if len(rawData) <= 4 {
 			return errors.New("Configuration: No sufficient bytes to decode next configuration")
@@ -1248,7 +1118,6 @@ func (configuration *Configuration) unmarshal(rawData []byte) error {
 		configurationAttributeData := rawData[4:]
 
 		for len(configurationAttributeData) > 0 {
-			msgLog.Trace("[Configuration] unmarshal(): Unmarshal 1 configuration attribute")
 			// bounds checking
 			if len(configurationAttributeData) < 4 {
 				return errors.New("ConfigurationAttribute: No sufficient bytes to decode next configuration attribute")
@@ -1286,8 +1155,6 @@ type EAP struct {
 func (eap *EAP) Type() types.IKEPayloadType { return types.TypeEAP }
 
 func (eap *EAP) marshal() ([]byte, error) {
-	msgLog.Info("[EAP] marshal(): Start marshalling")
-
 	eapData := make([]byte, 4)
 
 	eapData[0] = eap.Code
@@ -1308,11 +1175,7 @@ func (eap *EAP) marshal() ([]byte, error) {
 }
 
 func (eap *EAP) unmarshal(rawData []byte) error {
-	msgLog.Info("[EAP] unmarshal(): Start unmarshalling received bytes")
-	msgLog.Tracef("[EAP] unmarshal(): Payload length %d bytes", len(rawData))
-
 	if len(rawData) > 0 {
-		msgLog.Trace("[EAP] unmarshal(): Unmarshal 1 EAP")
 		// bounds checking
 		if len(rawData) < 4 {
 			return errors.New("EAP: No sufficient bytes to decode next EAP payload")
@@ -1383,8 +1246,6 @@ type EAPIdentity struct {
 func (eapIdentity *EAPIdentity) Type() types.EAPType { return types.EAPTypeIdentity }
 
 func (eapIdentity *EAPIdentity) marshal() ([]byte, error) {
-	msgLog.Info("[EAP][Identity] marshal(): Start marshalling")
-
 	if len(eapIdentity.IdentityData) == 0 {
 		return nil, errors.New("EAPIdentity: EAP identity is empty")
 	}
@@ -1396,9 +1257,6 @@ func (eapIdentity *EAPIdentity) marshal() ([]byte, error) {
 }
 
 func (eapIdentity *EAPIdentity) unmarshal(rawData []byte) error {
-	msgLog.Info("[EAP][Identity] unmarshal(): Start unmarshalling received bytes")
-	msgLog.Tracef("[EAP][Identity] unmarshal(): Payload length %d bytes", len(rawData))
-
 	if len(rawData) > 1 {
 		eapIdentity.IdentityData = append(eapIdentity.IdentityData, rawData[1:]...)
 	}
@@ -1417,8 +1275,6 @@ type EAPNotification struct {
 func (eapNotification *EAPNotification) Type() types.EAPType { return types.EAPTypeNotification }
 
 func (eapNotification *EAPNotification) marshal() ([]byte, error) {
-	msgLog.Info("[EAP][Notification] marshal(): Start marshalling")
-
 	if len(eapNotification.NotificationData) == 0 {
 		return nil, errors.New("EAPNotification: EAP notification is empty")
 	}
@@ -1430,9 +1286,6 @@ func (eapNotification *EAPNotification) marshal() ([]byte, error) {
 }
 
 func (eapNotification *EAPNotification) unmarshal(rawData []byte) error {
-	msgLog.Info("[EAP][Notification] unmarshal(): Start unmarshalling received bytes")
-	msgLog.Tracef("[EAP][Notification] unmarshal(): Payload length %d bytes", len(rawData))
-
 	if len(rawData) > 1 {
 		eapNotification.NotificationData = append(eapNotification.NotificationData, rawData[1:]...)
 	}
@@ -1451,8 +1304,6 @@ type EAPNak struct {
 func (eapNak *EAPNak) Type() types.EAPType { return types.EAPTypeNak }
 
 func (eapNak *EAPNak) marshal() ([]byte, error) {
-	msgLog.Info("[EAP][Nak] marshal(): Start marshalling")
-
 	if len(eapNak.NakData) == 0 {
 		return nil, errors.New("EAPNak: EAP nak is empty")
 	}
@@ -1464,9 +1315,6 @@ func (eapNak *EAPNak) marshal() ([]byte, error) {
 }
 
 func (eapNak *EAPNak) unmarshal(rawData []byte) error {
-	msgLog.Info("[EAP][Nak] unmarshal(): Start unmarshalling received bytes")
-	msgLog.Tracef("[EAP][Nak] unmarshal(): Payload length %d bytes", len(rawData))
-
 	if len(rawData) > 1 {
 		eapNak.NakData = append(eapNak.NakData, rawData[1:]...)
 	}
@@ -1487,8 +1335,6 @@ type EAPExpanded struct {
 func (eapExpanded *EAPExpanded) Type() types.EAPType { return types.EAPTypeExpanded }
 
 func (eapExpanded *EAPExpanded) marshal() ([]byte, error) {
-	msgLog.Info("[EAP][Expanded] marshal(): Start marshalling")
-
 	eapExpandedData := make([]byte, 8)
 
 	vendorID := eapExpanded.VendorID & 0x00ffffff
@@ -1498,7 +1344,6 @@ func (eapExpanded *EAPExpanded) marshal() ([]byte, error) {
 	binary.BigEndian.PutUint32(eapExpandedData[4:8], eapExpanded.VendorType)
 
 	if len(eapExpanded.VendorData) == 0 {
-		msgLog.Warn("[EAP][Expanded] marshal(): EAP vendor data field is empty")
 		return eapExpandedData, nil
 	}
 
@@ -1508,9 +1353,6 @@ func (eapExpanded *EAPExpanded) marshal() ([]byte, error) {
 }
 
 func (eapExpanded *EAPExpanded) unmarshal(rawData []byte) error {
-	msgLog.Info("[EAP][Expanded] unmarshal(): Start unmarshalling received bytes")
-	msgLog.Tracef("[EAP][Expanded] unmarshal(): Payload length %d bytes", len(rawData))
-
 	if len(rawData) > 0 {
 		if len(rawData) < 8 {
 			return errors.New("EAPExpanded: No sufficient bytes to decode the EAP expanded type")

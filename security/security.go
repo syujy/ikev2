@@ -4,8 +4,8 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
+	"fmt"
 	"hash"
 	"io"
 	"math/big"
@@ -17,53 +17,44 @@ import (
 	"bitbucket.org/_syujy/ike/esn"
 	"bitbucket.org/_syujy/ike/integ"
 	"bitbucket.org/_syujy/ike/internal/lib"
-	"bitbucket.org/_syujy/ike/internal/logger"
 	"bitbucket.org/_syujy/ike/message"
 	"bitbucket.org/_syujy/ike/prf"
 	"bitbucket.org/_syujy/ike/types"
 
-	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 )
-
-// Log
-var secLog *logrus.Entry
 
 // General data
 var randomNumberMaximum big.Int
 var randomNumberMinimum big.Int
 
 func init() {
-	// Log
-	secLog = logger.SecLog
 	// General data
 	randomNumberMaximum.SetString(strings.Repeat("F", 512), 16)
 	randomNumberMinimum.SetString(strings.Repeat("F", 32), 16)
 }
 
-func GenerateRandomNumber() *big.Int {
+func GenerateRandomNumber() (*big.Int, error) {
 	var number *big.Int
 	var err error
 	for {
 		number, err = rand.Int(rand.Reader, &randomNumberMaximum)
 		if err != nil {
-			secLog.Errorf("Error occurs when generate random number: %+v", err)
-			return nil
+			return nil, fmt.Errorf("rand.Int() failed: %+v", err)
 		} else {
 			if number.Cmp(&randomNumberMinimum) == 1 {
 				break
 			}
 		}
 	}
-	return number
+	return number, nil
 }
 
 func GenerateRandomUint8() (uint8, error) {
 	number := make([]byte, 1)
 	_, err := io.ReadFull(rand.Reader, number)
 	if err != nil {
-		secLog.Errorf("Read random failed: %+v", err)
-		return 0, errors.New("Read failed")
+		return 0, fmt.Errorf("Read random failed: %+v", err)
 	}
 	return uint8(number[0]), nil
 }
@@ -91,13 +82,16 @@ type IKESA struct {
 	prfInfo   prf.PRFType
 
 	// Security objects
-	Prf_d   hash.Hash      // used to derive key for child sa
-	Integ_i hash.Hash      // used by initiator for integrity checking
-	Integ_r hash.Hash      // used by responder for integrity checking
-	Encr_i  encr.IKECrypto // used by initiator for encrypting
-	Encr_r  encr.IKECrypto // used by responder for encrypting
-	Prf_i   hash.Hash      // used by initiator for IKE authentication
-	Prf_r   hash.Hash      // used by responder for IKE authentication
+	Prf_d   hash.Hash       // used to derive key for child sa
+	Integ_i hash.Hash       // used by initiator for integrity checking
+	Integ_r hash.Hash       // used by responder for integrity checking
+	Encr_i  types.IKECrypto // used by initiator for encrypting
+	Encr_r  types.IKECrypto // used by responder for encrypting
+	Prf_i   hash.Hash       // used by initiator for IKE authentication
+	Prf_r   hash.Hash       // used by responder for IKE authentication
+
+	// NAT detection
+	NATT bool
 }
 
 func (ikesa *IKESA) SelectProposal(proposal *message.Proposal) bool {
@@ -196,10 +190,13 @@ func (ikesa *IKESA) SetProposal(proposal *message.Proposal) bool {
 // CalcKEMaterial generates secret and calculate Diffie-Hellman public key
 // exchange material.
 // Peer public value as parameter, return local public value and shared key.
-func (ikesa *IKESA) CalcKEMaterial(peerPublicValue []byte) ([]byte, []byte) {
-	secret := GenerateRandomNumber()
+func (ikesa *IKESA) CalcKEMaterial(peerPublicValue []byte) ([]byte, []byte, error) {
+	secret, err := GenerateRandomNumber()
+	if err != nil {
+		return nil, nil, fmt.Errorf("GenerateRandomNumber() failed: %+v", err)
+	}
 	peerPublicValueBig := new(big.Int).SetBytes(peerPublicValue)
-	return ikesa.dhInfo.GetPublicValue(secret), ikesa.dhInfo.GetSharedKey(secret, peerPublicValueBig)
+	return ikesa.dhInfo.GetPublicValue(secret), ikesa.dhInfo.GetSharedKey(secret, peerPublicValueBig), nil
 }
 
 func (ikesa *IKESA) GenerateKey(concatenatedNonce, dhSharedKey []byte) error {
@@ -242,16 +239,11 @@ func (ikesa *IKESA) GenerateKey(concatenatedNonce, dhSharedKey []byte) error {
 	totalKeyLength = length_SK_d + length_SK_ai + length_SK_ar + length_SK_ei + length_SK_er + length_SK_pi + length_SK_pr
 
 	// Generate IKE SA key as defined in RFC7296 Section 1.3 and Section 1.4
-	secLog.Tracef("Concatenated nonce:\n%s", hex.Dump(concatenatedNonce))
-	secLog.Tracef("DH shared key:\n%s", hex.Dump(dhSharedKey))
-
 	prf := ikesa.prfInfo.Init(concatenatedNonce)
 	_, _ = prf.Write(dhSharedKey) // hash.Hash.Write() never return an error
 
 	skeyseed := prf.Sum(nil)
 	seed := concatenateNonceAndSPI(concatenatedNonce, ikesa.RemoteSPI, ikesa.LocalSPI)
-
-	secLog.Tracef("SKEYSEED:\n%s", hex.Dump(skeyseed))
 
 	keyStream := lib.PrfPlus(ikesa.prfInfo.Init(skeyseed), seed, totalKeyLength)
 
@@ -269,14 +261,6 @@ func (ikesa *IKESA) GenerateKey(concatenatedNonce, dhSharedKey []byte) error {
 	sk_pi := keyStream[:length_SK_pi]
 	keyStream = keyStream[length_SK_pi:]
 	sk_pr := keyStream[:length_SK_pr]
-
-	secLog.Tracef("SK_d:\n%s", hex.Dump(sk_d))
-	secLog.Tracef("SK_ai:\n%s", hex.Dump(sk_ai))
-	secLog.Tracef("SK_ar:\n%s", hex.Dump(sk_ar))
-	secLog.Tracef("SK_ei:\n%s", hex.Dump(sk_ei))
-	secLog.Tracef("SK_er:\n%s", hex.Dump(sk_er))
-	secLog.Tracef("SK_pi:\n%s", hex.Dump(sk_pi))
-	secLog.Tracef("SK_pr:\n%s", hex.Dump(sk_pr))
 
 	// Set security objects
 	encri, err := ikesa.encrInfo.Init(sk_ei)
@@ -354,14 +338,12 @@ func (ikesa *IKESA) EncryptToSKPayload(role int, data []byte) ([]byte, error) {
 	if role == types.Role_Initiator {
 		var err error
 		if cipherText, err = ikesa.Encr_i.Encrypt(data); err != nil {
-			secLog.Errorf("Encrypt() failed: %+v", err)
-			return nil, errors.New("Failed to encrypt to SK")
+			return nil, fmt.Errorf("Encrypt() failed: %+v", err)
 		}
 	} else {
 		var err error
 		if cipherText, err = ikesa.Encr_r.Encrypt(data); err != nil {
-			secLog.Errorf("Encrypt() failed: %+v", err)
-			return nil, errors.New("Failed to encrypt to SK")
+			return nil, fmt.Errorf("Encrypt() failed: %+v", err)
 		}
 	}
 
@@ -382,14 +364,12 @@ func (ikesa *IKESA) DecryptSKPayload(role int, data []byte) ([]byte, error) {
 	if role == types.Role_Initiator {
 		var err error
 		if plainText, err = ikesa.Encr_i.Decrypt(data); err != nil {
-			secLog.Errorf("Decrypt() failed: %+v", err)
-			return nil, errors.New("Failed to decrypt SK")
+			return nil, fmt.Errorf("Decrypt() failed: %+v", err)
 		}
 	} else {
 		var err error
 		if plainText, err = ikesa.Encr_r.Decrypt(data); err != nil {
-			secLog.Errorf("Decrypt() failed: %+v", err)
-			return nil, errors.New("Failed to decrypt SK")
+			return nil, fmt.Errorf("Decrypt() failed: %+v", err)
 		}
 	}
 
@@ -536,10 +516,13 @@ func (childsa *ChildSA) SetProposal(proposal *message.Proposal) bool {
 // CalcKEMaterial generates secret and calculate Diffie-Hellman public key
 // exchange material.
 // Peer public value as parameter, return local public value and shared key.
-func (childsa *ChildSA) CalcKEMaterial(peerPublicValue []byte) ([]byte, []byte) {
-	secret := GenerateRandomNumber()
+func (childsa *ChildSA) CalcKEMaterial(peerPublicValue []byte) ([]byte, []byte, error) {
+	secret, err := GenerateRandomNumber()
+	if err != nil {
+		return nil, nil, fmt.Errorf("GenerateRandomNumber() failed: %+v", err)
+	}
 	peerPublicValueBig := new(big.Int).SetBytes(peerPublicValue)
-	return childsa.dhInfo.GetPublicValue(secret), childsa.dhInfo.GetSharedKey(secret, peerPublicValueBig)
+	return childsa.dhInfo.GetPublicValue(secret), childsa.dhInfo.GetSharedKey(secret, peerPublicValueBig), nil
 }
 
 // Key Gen for child SA
@@ -742,40 +725,32 @@ func (childsa *ChildSA) GenerateXFRMContext(role int) {
 
 func (childsa *ChildSA) XFRMRuleAdd() error {
 	if err := netlink.XfrmStateAdd(childsa.initiatorToResponderState); err != nil {
-		secLog.Errorf("Add XFRM state failed: %+v", err)
-		return errors.New("Add XFRM initiator to responder state failed")
+		return fmt.Errorf("netlink.XfrmStateAdd() initiator to responder failed: %+v", err)
 	}
 	if err := netlink.XfrmPolicyAdd(childsa.initiatorToResponderPolicy); err != nil {
-		secLog.Errorf("Add XFRM policy failed: %+v", err)
-		return errors.New("Add XFRM initiator to responder policy failed")
+		return fmt.Errorf("netlink.XfrmPolicyAdd() initiator to responder failed: %+v", err)
 	}
 	if err := netlink.XfrmStateAdd(childsa.responderToInitiatorState); err != nil {
-		secLog.Errorf("Add XFRM state failed: %+v", err)
-		return errors.New("Add XFRM responder to initiator state failed")
+		return fmt.Errorf("netlink.XfrmStateAdd() responder to initiator failed: %+v", err)
 	}
 	if err := netlink.XfrmPolicyAdd(childsa.responderToInitiatorPolicy); err != nil {
-		secLog.Errorf("Add XFRM policy failed: %+v", err)
-		return errors.New("Add XFRM responder to initiator policy failed")
+		return fmt.Errorf("netlink.XfrmPolicyAdd() responder to initiator failed: %+v", err)
 	}
 	return nil
 }
 
 func (childsa *ChildSA) XFRMRuleFlush() error {
 	if err := netlink.XfrmStateDel(childsa.initiatorToResponderState); err != nil {
-		secLog.Errorf("Delete XFRM state failed: %+v", err)
-		return errors.New("Delete XFRM initiator to responder state failed")
+		return fmt.Errorf("netlink.XfrmStateDel() initiator to responder failed: %+v", err)
 	}
 	if err := netlink.XfrmPolicyDel(childsa.initiatorToResponderPolicy); err != nil {
-		secLog.Errorf("Delete XFRM policy failed: %+v", err)
-		return errors.New("Delete XFRM initiator to responder policy failed")
+		return fmt.Errorf("netlink.XfrmPolicyDel() initiator to responder failed: %+v", err)
 	}
 	if err := netlink.XfrmStateDel(childsa.responderToInitiatorState); err != nil {
-		secLog.Errorf("Delete XFRM state failed: %+v", err)
-		return errors.New("Delete XFRM responder to initiator state failed")
+		return fmt.Errorf("netlink.XfrmStateDel() responder to initiator failed: %+v", err)
 	}
 	if err := netlink.XfrmPolicyDel(childsa.responderToInitiatorPolicy); err != nil {
-		secLog.Errorf("Delete XFRM policy failed: %+v", err)
-		return errors.New("Delete XFRM responder to initiator policy failed")
+		return fmt.Errorf("netlink.XfrmPolicyDel() responder to initiator failed: %+v", err)
 	}
 	return nil
 }
