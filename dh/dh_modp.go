@@ -78,7 +78,7 @@ func NewType_DH_1024_BIT_MODP() (*DH_MODP, error) {
 		transformID:       types.DH_1024_BIT_MODP,
 		factor:            factor,
 		generator:         generator,
-		factorBytesLength: len(group2PrimeString),
+		factorBytesLength: len(factor.Bytes()),
 	}
 
 	return dhType, nil
@@ -118,7 +118,7 @@ func NewType_DH_2048_BIT_MODP() (*DH_MODP, error) {
 		transformID:       types.DH_2048_BIT_MODP,
 		factor:            factor,
 		generator:         generator,
-		factorBytesLength: len(group14PrimeString),
+		factorBytesLength: len(factor.Bytes()),
 	}
 
 	return dhType, nil
