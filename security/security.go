@@ -199,7 +199,7 @@ func (ikesa *IKESA) CalcKEMaterial(peerPublicValue []byte) ([]byte, []byte, erro
 	return ikesa.dhInfo.GetPublicValue(secret), ikesa.dhInfo.GetSharedKey(secret, peerPublicValueBig), nil
 }
 
-func (ikesa *IKESA) GenerateKey(concatenatedNonce, dhSharedKey []byte) error {
+func (ikesa *IKESA) GenerateKey(concatenatedNonce, dhSharedKey, concatenatedSPI []byte) error {
 	// Check parameters
 	if ikesa == nil {
 		return errors.New("IKE SA is nil")
@@ -243,7 +243,7 @@ func (ikesa *IKESA) GenerateKey(concatenatedNonce, dhSharedKey []byte) error {
 	_, _ = prf.Write(dhSharedKey) // hash.Hash.Write() never return an error
 
 	skeyseed := prf.Sum(nil)
-	seed := concatenateNonceAndSPI(concatenatedNonce, ikesa.RemoteSPI, ikesa.LocalSPI)
+	seed := append(concatenatedNonce, concatenatedSPI...)
 
 	keyStream := lib.PrfPlus(ikesa.prfInfo.Init(skeyseed), seed, totalKeyLength)
 
