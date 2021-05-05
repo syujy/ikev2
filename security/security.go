@@ -92,6 +92,9 @@ type IKESA struct {
 
 	// NAT detection
 	NATT bool
+
+	// Message ID
+	MessageID uint32
 }
 
 func (ikesa *IKESA) SelectProposal(proposal *message.Proposal) bool {
@@ -376,18 +379,21 @@ func (ikesa *IKESA) DecryptSKPayload(role int, data []byte) ([]byte, error) {
 	return plainText, nil
 }
 
+func (ikesa *IKESA) CheckMessageID(mID uint32) bool {
+	if ikesa.MessageID == mID {
+		ikesa.MessageID++
+		return true
+	} else {
+		return false
+	}
+}
+
 type ChildSA struct {
 	// SPI
 	SPI uint32
 
-	// Child SA transform types
-	dhInfo     dh.DHType
-	encrKInfo  encr.ENCRKType
-	integKInfo integ.INTEGKType
-	esnInfo    esn.ESNType
-
 	// Mark
-	Mark uint32
+	Mark int
 
 	// IP addresses
 	RemotePublicIPAddr net.IP
@@ -398,16 +404,22 @@ type ChildSA struct {
 	TSLocal  *net.IPNet
 	TSRemote *net.IPNet
 
-	// Security
-	initiatorToResponderEncrKey  []byte
-	responderToInitiatorEncrKey  []byte
-	initiatorToResponderIntegKey []byte
-	responderToInitiatorIntegKey []byte
-
 	// Encapsulate
 	EnableEncap bool
 	LocalPort   int
 	RemotePort  int
+
+	// Child SA transform types
+	dhInfo     dh.DHType
+	encrKInfo  encr.ENCRKType
+	integKInfo integ.INTEGKType
+	esnInfo    esn.ESNType
+
+	// Keys
+	initiatorToResponderEncrKey  []byte
+	responderToInitiatorEncrKey  []byte
+	initiatorToResponderIntegKey []byte
+	responderToInitiatorIntegKey []byte
 
 	// XFRM contexts
 	initiatorToResponderPolicy *netlink.XfrmPolicy
@@ -582,14 +594,8 @@ func (childsa *ChildSA) GenerateKey(prf hash.Hash, dhSharedKey, concatenatedNonc
 
 }
 
-func (childsa *ChildSA) GenerateXFRMContext(role int) {
-	// Mark
-	mark := &netlink.XfrmMark{
-		Value: childsa.Mark,
-	}
-
-	// Initiator to responder state and policy
-	// State
+func (childsa *ChildSA) GenerateXFRMState(role int, allocspi bool) error {
+	// Initiator to responder state
 	s := new(netlink.XfrmState)
 	if role == types.Role_Initiator {
 		s.Src = childsa.LocalPublicIPAddr
@@ -600,8 +606,97 @@ func (childsa *ChildSA) GenerateXFRMContext(role int) {
 	}
 	s.Proto = netlink.XFRM_PROTO_ESP
 	s.Mode = netlink.XFRM_MODE_TUNNEL
-	s.Spi = int(childsa.SPI)
-	s.Mark = mark
+	if childsa.Mark != -1 {
+		s.Mark = &netlink.XfrmMark{
+			Value: uint32(childsa.Mark),
+		}
+	}
+
+	if allocspi {
+		if s_spi, err := netlink.XfrmStateAllocSpi(s); err != nil {
+			return err
+		} else {
+			s = s_spi
+			childsa.SPI = uint32(s_spi.Spi)
+		}
+	} else {
+		s.Spi = int(childsa.SPI)
+	}
+
+	childsa.initiatorToResponderState = s
+
+	// Responder to initiator state
+	s = new(netlink.XfrmState)
+	*s = *childsa.initiatorToResponderState
+	s.Src, s.Dst = s.Dst, s.Src
+
+	childsa.responderToInitiatorState = s
+
+	return nil
+}
+
+func (childsa *ChildSA) GenerateXFRMPolicy(role int) error {
+	// Initiator to responder policy
+	s := childsa.initiatorToResponderState
+	if s == nil {
+		return errors.New("initiator to responder state is nil")
+	}
+	p := new(netlink.XfrmPolicy)
+	if role == types.Role_Initiator {
+		p.Src = childsa.TSLocal
+		p.Dst = childsa.TSRemote
+		p.Dir = netlink.XFRM_DIR_OUT
+	} else {
+		p.Src = childsa.TSRemote
+		p.Dst = childsa.TSLocal
+		p.Dir = netlink.XFRM_DIR_IN
+	}
+	p.Proto = netlink.Proto(childsa.IPProto)
+	if childsa.Mark != -1 {
+		p.Mark = &netlink.XfrmMark{
+			Value: uint32(childsa.Mark),
+		}
+	}
+
+	p.Tmpls = []netlink.XfrmPolicyTmpl{
+		{
+			Src:   s.Src,
+			Dst:   s.Dst,
+			Proto: s.Proto,
+			Mode:  s.Mode,
+			Spi:   s.Spi,
+		},
+	}
+
+	childsa.initiatorToResponderPolicy = p
+
+	// Responder to initiator policy
+	s = childsa.responderToInitiatorState
+	if s == nil {
+		return errors.New("responder to initiator state is nil")
+	}
+	p = new(netlink.XfrmPolicy)
+	*p = *childsa.initiatorToResponderPolicy
+	p.Src, p.Dst = p.Dst, p.Src
+	p.Dir ^= 1
+	p.Tmpls = []netlink.XfrmPolicyTmpl{
+		{
+			Src:   s.Src,
+			Dst:   s.Dst,
+			Proto: s.Proto,
+			Mode:  s.Mode,
+			Spi:   s.Spi,
+		},
+	}
+
+	childsa.responderToInitiatorPolicy = p
+
+	return nil
+}
+
+func (childsa *ChildSA) SetXFRMState(role int) {
+	// Initiator to responder state
+	s := childsa.initiatorToResponderState
 	if childsa.integKInfo != nil {
 		s.Auth = &netlink.XfrmStateAlgo{
 			Name: childsa.integKInfo.XFRMString(),
@@ -629,46 +724,8 @@ func (childsa *ChildSA) GenerateXFRMContext(role int) {
 		}
 	}
 
-	// Policy
-	p := new(netlink.XfrmPolicy)
-	if role == types.Role_Initiator {
-		p.Src = childsa.TSLocal
-		p.Dst = childsa.TSRemote
-		p.Dir = netlink.XFRM_DIR_OUT
-	} else {
-		p.Src = childsa.TSRemote
-		p.Dst = childsa.TSLocal
-		p.Dir = netlink.XFRM_DIR_IN
-	}
-	p.Proto = netlink.Proto(childsa.IPProto)
-	p.Mark = mark
-	p.Tmpls = []netlink.XfrmPolicyTmpl{
-		{
-			Src:   s.Src,
-			Dst:   s.Dst,
-			Proto: s.Proto,
-			Mode:  s.Mode,
-			Spi:   s.Spi,
-		},
-	}
-
-	childsa.initiatorToResponderState = s
-	childsa.initiatorToResponderPolicy = p
-
-	// Responder to initiator state and policy
-	// State
-	s = new(netlink.XfrmState)
-	if role == types.Role_Initiator {
-		s.Src = childsa.RemotePublicIPAddr
-		s.Dst = childsa.LocalPublicIPAddr
-	} else {
-		s.Src = childsa.LocalPublicIPAddr
-		s.Dst = childsa.RemotePublicIPAddr
-	}
-	s.Proto = netlink.XFRM_PROTO_ESP
-	s.Mode = netlink.XFRM_MODE_TUNNEL
-	s.Spi = int(childsa.SPI)
-	s.Mark = mark
+	// Responder to initiator state
+	s = childsa.responderToInitiatorState
 	if childsa.integKInfo != nil {
 		s.Auth = &netlink.XfrmStateAlgo{
 			Name: childsa.integKInfo.XFRMString(),
@@ -695,32 +752,6 @@ func (childsa *ChildSA) GenerateXFRMContext(role int) {
 			}
 		}
 	}
-
-	// Policy
-	p = new(netlink.XfrmPolicy)
-	if role == types.Role_Initiator {
-		p.Src = childsa.TSRemote
-		p.Dst = childsa.TSLocal
-		p.Dir = netlink.XFRM_DIR_IN
-	} else {
-		p.Src = childsa.TSLocal
-		p.Dst = childsa.TSRemote
-		p.Dir = netlink.XFRM_DIR_OUT
-	}
-	p.Proto = netlink.Proto(childsa.IPProto)
-	p.Mark = mark
-	p.Tmpls = []netlink.XfrmPolicyTmpl{
-		{
-			Src:   s.Src,
-			Dst:   s.Dst,
-			Proto: s.Proto,
-			Mode:  s.Mode,
-			Spi:   s.Spi,
-		},
-	}
-
-	childsa.responderToInitiatorState = s
-	childsa.responderToInitiatorPolicy = p
 }
 
 func (childsa *ChildSA) XFRMRuleAdd() error {
