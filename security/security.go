@@ -92,6 +92,9 @@ type IKESA struct {
 
 	// NAT detection
 	NATT bool
+
+	// Message ID
+	MessageID uint32
 }
 
 func (ikesa *IKESA) SelectProposal(proposal *message.Proposal) bool {
@@ -376,15 +379,18 @@ func (ikesa *IKESA) DecryptSKPayload(role int, data []byte) ([]byte, error) {
 	return plainText, nil
 }
 
+func (ikesa *IKESA) CheckMessageID(mID uint32) bool {
+	if ikesa.MessageID == mID {
+		ikesa.MessageID++
+		return true
+	} else {
+		return false
+	}
+}
+
 type ChildSA struct {
 	// SPI
 	SPI uint32
-
-	// Child SA transform types
-	dhInfo     dh.DHType
-	encrKInfo  encr.ENCRKType
-	integKInfo integ.INTEGKType
-	esnInfo    esn.ESNType
 
 	// Mark
 	Mark int
@@ -398,16 +404,22 @@ type ChildSA struct {
 	TSLocal  *net.IPNet
 	TSRemote *net.IPNet
 
-	// Security
-	initiatorToResponderEncrKey  []byte
-	responderToInitiatorEncrKey  []byte
-	initiatorToResponderIntegKey []byte
-	responderToInitiatorIntegKey []byte
-
 	// Encapsulate
 	EnableEncap bool
 	LocalPort   int
 	RemotePort  int
+
+	// Child SA transform types
+	dhInfo     dh.DHType
+	encrKInfo  encr.ENCRKType
+	integKInfo integ.INTEGKType
+	esnInfo    esn.ESNType
+
+	// Keys
+	initiatorToResponderEncrKey  []byte
+	responderToInitiatorEncrKey  []byte
+	initiatorToResponderIntegKey []byte
+	responderToInitiatorIntegKey []byte
 
 	// XFRM contexts
 	initiatorToResponderPolicy *netlink.XfrmPolicy
