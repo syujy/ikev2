@@ -22,7 +22,7 @@ type AUTH_HMAC struct {
 	priority     uint32
 	keyLength    int
 	outputLength int
-	hashFunc     func() hash.Hash
+	hashFunc     func([]byte) hash.Hash
 	xfrmString   string
 }
 
@@ -52,7 +52,7 @@ func (t *AUTH_HMAC) GetOutputLength() int {
 
 func (t *AUTH_HMAC) Init(key []byte) hash.Hash {
 	if len(key) == t.keyLength {
-		return hmac.New(t.hashFunc, key)
+		return new_HMAC_MD5_96(key)
 	} else {
 		return nil
 	}
@@ -72,8 +72,26 @@ func NewType_AUTH_HMAC_MD5_96() *AUTH_HMAC {
 		transformID:  types.AUTH_HMAC_MD5_96,
 		keyLength:    16,
 		outputLength: 12,
-		hashFunc:     md5.New,
+		hashFunc:     new_HMAC_MD5_96,
 		xfrmString:   "hmac(md5)",
+	}
+}
+
+type digest_HMAC_MD5_96 struct {
+	hash.Hash
+}
+
+func (d *digest_HMAC_MD5_96) Sum(b []byte) []byte {
+	return d.Hash.Sum(b)[:len(b)+12]
+}
+
+func (d *digest_HMAC_MD5_96) Size() int {
+	return 12
+}
+
+func new_HMAC_MD5_96(key []byte) hash.Hash {
+	return &digest_HMAC_MD5_96{
+		Hash: hmac.New(md5.New, key),
 	}
 }
 
@@ -87,7 +105,25 @@ func NewType_AUTH_HMAC_SHA1_96() *AUTH_HMAC {
 		transformID:  types.AUTH_HMAC_SHA1_96,
 		keyLength:    20,
 		outputLength: 12,
-		hashFunc:     sha1.New,
+		hashFunc:     new_HMAC_SHA1_96,
 		xfrmString:   "hmac(sha1)",
+	}
+}
+
+type digest_HMAC_SHA1_96 struct {
+	hash.Hash
+}
+
+func (d *digest_HMAC_SHA1_96) Sum(b []byte) []byte {
+	return d.Hash.Sum(b)[:len(b)+12]
+}
+
+func (d *digest_HMAC_SHA1_96) Size() int {
+	return 12
+}
+
+func new_HMAC_SHA1_96(key []byte) hash.Hash {
+	return &digest_HMAC_SHA1_96{
+		Hash: hmac.New(sha1.New, key),
 	}
 }

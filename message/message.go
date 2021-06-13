@@ -96,7 +96,7 @@ func (container *IKEPayloadContainer) Encode() (uint8, []byte, error) {
 			}
 		}
 
-		data, err := payload.marshal()
+		data, err := payload.Marshal()
 		if err != nil {
 			return 0, nil, fmt.Errorf("EncodePayload(): Failed to marshal payload: %+v", err)
 		}
@@ -175,7 +175,7 @@ func (container *IKEPayloadContainer) Decode(nextPayload uint8, rawData []byte) 
 			}
 		}
 
-		if err := payload.unmarshal(rawData[4:payloadLength]); err != nil {
+		if err := payload.Unmarshal(rawData[4:payloadLength]); err != nil {
 			return fmt.Errorf("DecodePayload(): Unmarshal payload failed: %+v", err)
 		}
 
@@ -193,8 +193,8 @@ type IKEPayload interface {
 	Type() types.IKEPayloadType
 
 	// Called by Encode() or Decode()
-	marshal() ([]byte, error)
-	unmarshal(rawData []byte) error
+	Marshal() ([]byte, error)
+	Unmarshal(rawData []byte) error
 }
 
 // Definition of Security Association
@@ -232,7 +232,7 @@ type Transform struct {
 
 func (securityAssociation *SecurityAssociation) Type() types.IKEPayloadType { return types.TypeSA }
 
-func (securityAssociation *SecurityAssociation) marshal() ([]byte, error) {
+func (securityAssociation *SecurityAssociation) Marshal() ([]byte, error) {
 	securityAssociationData := make([]byte, 0)
 
 	for proposalIndex, proposal := range securityAssociation.Proposals {
@@ -315,7 +315,7 @@ func (securityAssociation *SecurityAssociation) marshal() ([]byte, error) {
 	return securityAssociationData, nil
 }
 
-func (securityAssociation *SecurityAssociation) unmarshal(rawData []byte) error {
+func (securityAssociation *SecurityAssociation) Unmarshal(rawData []byte) error {
 	for len(rawData) > 0 {
 		// bounds checking
 		if len(rawData) < 8 {
@@ -417,7 +417,7 @@ type KeyExchange struct {
 
 func (keyExchange *KeyExchange) Type() types.IKEPayloadType { return types.TypeKE }
 
-func (keyExchange *KeyExchange) marshal() ([]byte, error) {
+func (keyExchange *KeyExchange) Marshal() ([]byte, error) {
 	keyExchangeData := make([]byte, 4)
 
 	binary.BigEndian.PutUint16(keyExchangeData[0:2], keyExchange.DiffieHellmanGroup)
@@ -426,7 +426,7 @@ func (keyExchange *KeyExchange) marshal() ([]byte, error) {
 	return keyExchangeData, nil
 }
 
-func (keyExchange *KeyExchange) unmarshal(rawData []byte) error {
+func (keyExchange *KeyExchange) Unmarshal(rawData []byte) error {
 	if len(rawData) > 0 {
 		// bounds checking
 		if len(rawData) <= 4 {
@@ -451,7 +451,7 @@ type IdentificationInitiator struct {
 
 func (identification *IdentificationInitiator) Type() types.IKEPayloadType { return types.TypeIDi }
 
-func (identification *IdentificationInitiator) marshal() ([]byte, error) {
+func (identification *IdentificationInitiator) Marshal() ([]byte, error) {
 	identificationData := make([]byte, 4)
 
 	identificationData[0] = identification.IDType
@@ -460,7 +460,7 @@ func (identification *IdentificationInitiator) marshal() ([]byte, error) {
 	return identificationData, nil
 }
 
-func (identification *IdentificationInitiator) unmarshal(rawData []byte) error {
+func (identification *IdentificationInitiator) Unmarshal(rawData []byte) error {
 	if len(rawData) > 0 {
 		// bounds checking
 		if len(rawData) <= 4 {
@@ -485,7 +485,7 @@ type IdentificationResponder struct {
 
 func (identification *IdentificationResponder) Type() types.IKEPayloadType { return types.TypeIDr }
 
-func (identification *IdentificationResponder) marshal() ([]byte, error) {
+func (identification *IdentificationResponder) Marshal() ([]byte, error) {
 	identificationData := make([]byte, 4)
 
 	identificationData[0] = identification.IDType
@@ -494,7 +494,7 @@ func (identification *IdentificationResponder) marshal() ([]byte, error) {
 	return identificationData, nil
 }
 
-func (identification *IdentificationResponder) unmarshal(rawData []byte) error {
+func (identification *IdentificationResponder) Unmarshal(rawData []byte) error {
 	if len(rawData) > 0 {
 		// bounds checking
 		if len(rawData) <= 4 {
@@ -519,7 +519,7 @@ type Certificate struct {
 
 func (certificate *Certificate) Type() types.IKEPayloadType { return types.TypeCERT }
 
-func (certificate *Certificate) marshal() ([]byte, error) {
+func (certificate *Certificate) Marshal() ([]byte, error) {
 	certificateData := make([]byte, 1)
 
 	certificateData[0] = certificate.CertificateEncoding
@@ -528,7 +528,7 @@ func (certificate *Certificate) marshal() ([]byte, error) {
 	return certificateData, nil
 }
 
-func (certificate *Certificate) unmarshal(rawData []byte) error {
+func (certificate *Certificate) Unmarshal(rawData []byte) error {
 	if len(rawData) > 0 {
 		// bounds checking
 		if len(rawData) <= 1 {
@@ -553,7 +553,7 @@ type CertificateRequest struct {
 
 func (certificateRequest *CertificateRequest) Type() types.IKEPayloadType { return types.TypeCERTreq }
 
-func (certificateRequest *CertificateRequest) marshal() ([]byte, error) {
+func (certificateRequest *CertificateRequest) Marshal() ([]byte, error) {
 	certificateRequestData := make([]byte, 1)
 
 	certificateRequestData[0] = certificateRequest.CertificateEncoding
@@ -562,7 +562,7 @@ func (certificateRequest *CertificateRequest) marshal() ([]byte, error) {
 	return certificateRequestData, nil
 }
 
-func (certificateRequest *CertificateRequest) unmarshal(rawData []byte) error {
+func (certificateRequest *CertificateRequest) Unmarshal(rawData []byte) error {
 	if len(rawData) > 0 {
 		// bounds checking
 		if len(rawData) <= 1 {
@@ -587,7 +587,7 @@ type Authentication struct {
 
 func (authentication *Authentication) Type() types.IKEPayloadType { return types.TypeAUTH }
 
-func (authentication *Authentication) marshal() ([]byte, error) {
+func (authentication *Authentication) Marshal() ([]byte, error) {
 	authenticationData := make([]byte, 4)
 
 	authenticationData[0] = authentication.AuthenticationMethod
@@ -596,7 +596,7 @@ func (authentication *Authentication) marshal() ([]byte, error) {
 	return authenticationData, nil
 }
 
-func (authentication *Authentication) unmarshal(rawData []byte) error {
+func (authentication *Authentication) Unmarshal(rawData []byte) error {
 	if len(rawData) > 0 {
 		// bounds checking
 		if len(rawData) <= 4 {
@@ -620,14 +620,14 @@ type Nonce struct {
 
 func (nonce *Nonce) Type() types.IKEPayloadType { return types.TypeNiNr }
 
-func (nonce *Nonce) marshal() ([]byte, error) {
+func (nonce *Nonce) Marshal() ([]byte, error) {
 	nonceData := make([]byte, 0)
 	nonceData = append(nonceData, nonce.NonceData...)
 
 	return nonceData, nil
 }
 
-func (nonce *Nonce) unmarshal(rawData []byte) error {
+func (nonce *Nonce) Unmarshal(rawData []byte) error {
 	if len(rawData) > 0 {
 		nonce.NonceData = append(nonce.NonceData, rawData...)
 	}
@@ -648,7 +648,7 @@ type Notification struct {
 
 func (notification *Notification) Type() types.IKEPayloadType { return types.TypeN }
 
-func (notification *Notification) marshal() ([]byte, error) {
+func (notification *Notification) Marshal() ([]byte, error) {
 	notificationData := make([]byte, 4)
 
 	notificationData[0] = notification.ProtocolID
@@ -661,7 +661,7 @@ func (notification *Notification) marshal() ([]byte, error) {
 	return notificationData, nil
 }
 
-func (notification *Notification) unmarshal(rawData []byte) error {
+func (notification *Notification) Unmarshal(rawData []byte) error {
 	if len(rawData) > 0 {
 		// bounds checking
 		if len(rawData) < 4 {
@@ -695,7 +695,7 @@ type Delete struct {
 
 func (delete *Delete) Type() types.IKEPayloadType { return types.TypeD }
 
-func (delete *Delete) marshal() ([]byte, error) {
+func (delete *Delete) Marshal() ([]byte, error) {
 	if len(delete.SPIs) != (int(delete.SPISize) * int(delete.NumberOfSPI)) {
 		return nil, fmt.Errorf("Total bytes of all SPIs not correct")
 	}
@@ -711,7 +711,7 @@ func (delete *Delete) marshal() ([]byte, error) {
 	return deleteData, nil
 }
 
-func (delete *Delete) unmarshal(rawData []byte) error {
+func (delete *Delete) Unmarshal(rawData []byte) error {
 	if len(rawData) > 0 {
 		// bounds checking
 		if len(rawData) <= 4 {
@@ -743,11 +743,11 @@ type VendorID struct {
 
 func (vendorID *VendorID) Type() types.IKEPayloadType { return types.TypeV }
 
-func (vendorID *VendorID) marshal() ([]byte, error) {
+func (vendorID *VendorID) Marshal() ([]byte, error) {
 	return vendorID.VendorIDData, nil
 }
 
-func (vendorID *VendorID) unmarshal(rawData []byte) error {
+func (vendorID *VendorID) Unmarshal(rawData []byte) error {
 	if len(rawData) > 0 {
 		vendorID.VendorIDData = append(vendorID.VendorIDData, rawData...)
 	}
@@ -776,7 +776,7 @@ type IndividualTrafficSelector struct {
 
 func (trafficSelector *TrafficSelectorInitiator) Type() types.IKEPayloadType { return types.TypeTSi }
 
-func (trafficSelector *TrafficSelectorInitiator) marshal() ([]byte, error) {
+func (trafficSelector *TrafficSelectorInitiator) Marshal() ([]byte, error) {
 	if len(trafficSelector.TrafficSelectors) > 0 {
 		trafficSelectorData := make([]byte, 4)
 		trafficSelectorData[0] = uint8(len(trafficSelector.TrafficSelectors))
@@ -837,7 +837,7 @@ func (trafficSelector *TrafficSelectorInitiator) marshal() ([]byte, error) {
 	}
 }
 
-func (trafficSelector *TrafficSelectorInitiator) unmarshal(rawData []byte) error {
+func (trafficSelector *TrafficSelectorInitiator) Unmarshal(rawData []byte) error {
 	if len(rawData) > 0 {
 		// bounds checking
 		if len(rawData) < 4 {
@@ -918,7 +918,7 @@ type TrafficSelectorResponder struct {
 
 func (trafficSelector *TrafficSelectorResponder) Type() types.IKEPayloadType { return types.TypeTSr }
 
-func (trafficSelector *TrafficSelectorResponder) marshal() ([]byte, error) {
+func (trafficSelector *TrafficSelectorResponder) Marshal() ([]byte, error) {
 	if len(trafficSelector.TrafficSelectors) > 0 {
 		trafficSelectorData := make([]byte, 4)
 		trafficSelectorData[0] = uint8(len(trafficSelector.TrafficSelectors))
@@ -979,7 +979,7 @@ func (trafficSelector *TrafficSelectorResponder) marshal() ([]byte, error) {
 	}
 }
 
-func (trafficSelector *TrafficSelectorResponder) unmarshal(rawData []byte) error {
+func (trafficSelector *TrafficSelectorResponder) Unmarshal(rawData []byte) error {
 	if len(rawData) > 0 {
 		// bounds checking
 		if len(rawData) < 4 {
@@ -1061,11 +1061,11 @@ type Encrypted struct {
 
 func (encrypted *Encrypted) Type() types.IKEPayloadType { return types.TypeSK }
 
-func (encrypted *Encrypted) marshal() ([]byte, error) {
+func (encrypted *Encrypted) Marshal() ([]byte, error) {
 	return encrypted.EncryptedData, nil
 }
 
-func (encrypted *Encrypted) unmarshal(rawData []byte) error {
+func (encrypted *Encrypted) Unmarshal(rawData []byte) error {
 	encrypted.EncryptedData = append(encrypted.EncryptedData, rawData...)
 	return nil
 }
@@ -1088,7 +1088,7 @@ type IndividualConfigurationAttribute struct {
 
 func (configuration *Configuration) Type() types.IKEPayloadType { return types.TypeCP }
 
-func (configuration *Configuration) marshal() ([]byte, error) {
+func (configuration *Configuration) Marshal() ([]byte, error) {
 	configurationData := make([]byte, 4)
 
 	configurationData[0] = configuration.ConfigurationType
@@ -1107,7 +1107,7 @@ func (configuration *Configuration) marshal() ([]byte, error) {
 	return configurationData, nil
 }
 
-func (configuration *Configuration) unmarshal(rawData []byte) error {
+func (configuration *Configuration) Unmarshal(rawData []byte) error {
 	if len(rawData) > 0 {
 		// bounds checking
 		if len(rawData) <= 4 {
@@ -1154,14 +1154,14 @@ type EAP struct {
 
 func (eap *EAP) Type() types.IKEPayloadType { return types.TypeEAP }
 
-func (eap *EAP) marshal() ([]byte, error) {
+func (eap *EAP) Marshal() ([]byte, error) {
 	eapData := make([]byte, 4)
 
 	eapData[0] = eap.Code
 	eapData[1] = eap.Identifier
 
 	if len(eap.EAPTypeData) > 0 {
-		eapTypeData, err := eap.EAPTypeData[0].marshal()
+		eapTypeData, err := eap.EAPTypeData[0].Marshal()
 		if err != nil {
 			return nil, fmt.Errorf("EAP: EAP type data marshal failed: %+v", err)
 		}
@@ -1174,7 +1174,7 @@ func (eap *EAP) marshal() ([]byte, error) {
 	return eapData, nil
 }
 
-func (eap *EAP) unmarshal(rawData []byte) error {
+func (eap *EAP) Unmarshal(rawData []byte) error {
 	if len(rawData) > 0 {
 		// bounds checking
 		if len(rawData) < 4 {
@@ -1213,7 +1213,7 @@ func (eap *EAP) unmarshal(rawData []byte) error {
 			return errors.New("EAP: Not supported EAP type")
 		}
 
-		if err := eapTypeData.unmarshal(rawData[4:]); err != nil {
+		if err := eapTypeData.Unmarshal(rawData[4:]); err != nil {
 			return fmt.Errorf("EAP: Unamrshal EAP type data failed: %+v", err)
 		}
 
@@ -1230,9 +1230,9 @@ type EAPTypeFormat interface {
 	// Type specifies EAP types
 	Type() types.EAPType
 
-	// Called by EAP.marshal() or EAP.unmarshal()
-	marshal() ([]byte, error)
-	unmarshal(rawData []byte) error
+	// Called by EAP.Marshal() or EAP.Unmarshal()
+	Marshal() ([]byte, error)
+	Unmarshal(rawData []byte) error
 }
 
 // Definition of EAP Identity
@@ -1245,7 +1245,7 @@ type EAPIdentity struct {
 
 func (eapIdentity *EAPIdentity) Type() types.EAPType { return types.EAPTypeIdentity }
 
-func (eapIdentity *EAPIdentity) marshal() ([]byte, error) {
+func (eapIdentity *EAPIdentity) Marshal() ([]byte, error) {
 	if len(eapIdentity.IdentityData) == 0 {
 		return nil, errors.New("EAPIdentity: EAP identity is empty")
 	}
@@ -1256,7 +1256,7 @@ func (eapIdentity *EAPIdentity) marshal() ([]byte, error) {
 	return eapIdentityData, nil
 }
 
-func (eapIdentity *EAPIdentity) unmarshal(rawData []byte) error {
+func (eapIdentity *EAPIdentity) Unmarshal(rawData []byte) error {
 	if len(rawData) > 1 {
 		eapIdentity.IdentityData = append(eapIdentity.IdentityData, rawData[1:]...)
 	}
@@ -1274,7 +1274,7 @@ type EAPNotification struct {
 
 func (eapNotification *EAPNotification) Type() types.EAPType { return types.EAPTypeNotification }
 
-func (eapNotification *EAPNotification) marshal() ([]byte, error) {
+func (eapNotification *EAPNotification) Marshal() ([]byte, error) {
 	if len(eapNotification.NotificationData) == 0 {
 		return nil, errors.New("EAPNotification: EAP notification is empty")
 	}
@@ -1285,7 +1285,7 @@ func (eapNotification *EAPNotification) marshal() ([]byte, error) {
 	return eapNotificationData, nil
 }
 
-func (eapNotification *EAPNotification) unmarshal(rawData []byte) error {
+func (eapNotification *EAPNotification) Unmarshal(rawData []byte) error {
 	if len(rawData) > 1 {
 		eapNotification.NotificationData = append(eapNotification.NotificationData, rawData[1:]...)
 	}
@@ -1303,7 +1303,7 @@ type EAPNak struct {
 
 func (eapNak *EAPNak) Type() types.EAPType { return types.EAPTypeNak }
 
-func (eapNak *EAPNak) marshal() ([]byte, error) {
+func (eapNak *EAPNak) Marshal() ([]byte, error) {
 	if len(eapNak.NakData) == 0 {
 		return nil, errors.New("EAPNak: EAP nak is empty")
 	}
@@ -1314,7 +1314,7 @@ func (eapNak *EAPNak) marshal() ([]byte, error) {
 	return eapNakData, nil
 }
 
-func (eapNak *EAPNak) unmarshal(rawData []byte) error {
+func (eapNak *EAPNak) Unmarshal(rawData []byte) error {
 	if len(rawData) > 1 {
 		eapNak.NakData = append(eapNak.NakData, rawData[1:]...)
 	}
@@ -1334,7 +1334,7 @@ type EAPExpanded struct {
 
 func (eapExpanded *EAPExpanded) Type() types.EAPType { return types.EAPTypeExpanded }
 
-func (eapExpanded *EAPExpanded) marshal() ([]byte, error) {
+func (eapExpanded *EAPExpanded) Marshal() ([]byte, error) {
 	eapExpandedData := make([]byte, 8)
 
 	vendorID := eapExpanded.VendorID & 0x00ffffff
@@ -1352,7 +1352,7 @@ func (eapExpanded *EAPExpanded) marshal() ([]byte, error) {
 	return eapExpandedData, nil
 }
 
-func (eapExpanded *EAPExpanded) unmarshal(rawData []byte) error {
+func (eapExpanded *EAPExpanded) Unmarshal(rawData []byte) error {
 	if len(rawData) > 0 {
 		if len(rawData) < 8 {
 			return errors.New("EAPExpanded: No sufficient bytes to decode the EAP expanded type")
