@@ -231,11 +231,28 @@ func (container *IKEPayloadContainer) BuildEAP5GStart(identifier uint8) {
 	eap.EAPTypeData.BuildEAPExpanded(types.VendorID3GPP, types.VendorTypeEAP5G, []byte{types.EAP5GType5GStart, types.EAP5GSpareValue})
 }
 
-func (container *IKEPayloadContainer) BuildEAP5GNAS(identifier uint8, nasPDU []byte) {
-	if len(nasPDU) == 0 {
-		return
-	}
+func (container *IKEPayloadContainer) BuildEAP5GNASRes(identifier uint8, anParam []byte, nasPDU []byte) {
+	vendorData := make([]byte, 2+(2+len(anParam))+(2+len(nasPDU)))
+	head := vendorData
 
+	// Message ID
+	head[0] = types.EAP5GType5GNAS
+	head = head[2:]
+	// AN Parameters
+	binary.BigEndian.PutUint16(head[:2], uint16(len(anParam)))
+	head = head[2:]
+	copy(head, anParam)
+	head = head[len(anParam):]
+	// NASPDU
+	binary.BigEndian.PutUint16(head[:2], uint16(len(nasPDU)))
+	head = head[2:]
+	copy(head, nasPDU)
+
+	eap := container.BuildEAP(types.EAPCodeResponse, identifier)
+	eap.EAPTypeData.BuildEAPExpanded(types.VendorID3GPP, types.VendorTypeEAP5G, vendorData)
+}
+
+func (container *IKEPayloadContainer) BuildEAP5GNASReq(identifier uint8, nasPDU []byte) {
 	header := make([]byte, 4)
 
 	// Message ID

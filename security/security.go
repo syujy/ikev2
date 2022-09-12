@@ -75,6 +75,9 @@ type IKESA struct {
 	RemoteSPI uint64
 	LocalSPI  uint64
 
+	// Role
+	Role int
+
 	// IKE SA transform types
 	dhInfo    dh.DHType
 	encrInfo  encr.ENCRType
@@ -190,6 +193,14 @@ func (ikesa *IKESA) SetProposal(proposal *message.Proposal) bool {
 	return true
 }
 
+func (ikesa *IKESA) GetDHTransformID() uint16 {
+	if ikesa.dhInfo == nil {
+		return 0
+	} else {
+		return ikesa.dhInfo.TransformID()
+	}
+}
+
 // CalcKEMaterial generates secret and calculate Diffie-Hellman public key
 // exchange material.
 // Peer public value as parameter, return local public value and shared key.
@@ -202,7 +213,7 @@ func (ikesa *IKESA) CalcKEMaterial(peerPublicValue []byte) ([]byte, []byte, erro
 	return ikesa.dhInfo.GetPublicValue(secret), ikesa.dhInfo.GetSharedKey(secret, peerPublicValueBig), nil
 }
 
-func (ikesa *IKESA) GenerateKey(concatenatedNonce, dhSharedKey []byte) error {
+func (ikesa *IKESA) GenerateKey(concatenatedNonce, dhSharedKey, concatenatedSPI []byte) error {
 	// Check parameters
 	if ikesa == nil {
 		return errors.New("IKE SA is nil")
@@ -246,7 +257,7 @@ func (ikesa *IKESA) GenerateKey(concatenatedNonce, dhSharedKey []byte) error {
 	_, _ = prf.Write(dhSharedKey) // hash.Hash.Write() never return an error
 
 	skeyseed := prf.Sum(nil)
-	seed := concatenateNonceAndSPI(concatenatedNonce, ikesa.RemoteSPI, ikesa.LocalSPI)
+	seed := append(concatenatedNonce, concatenatedSPI...)
 
 	keyStream := lib.PrfPlus(ikesa.prfInfo.Init(skeyseed), seed, totalKeyLength)
 
@@ -285,7 +296,7 @@ func (ikesa *IKESA) GenerateKey(concatenatedNonce, dhSharedKey []byte) error {
 	return nil
 }
 
-func (ikesa *IKESA) VerifyIKEChecksum(role int, data []byte) bool {
+func (ikesa *IKESA) VerifyIKEChecksum(data []byte) bool {
 	checksumLen := ikesa.integInfo.GetOutputLength()
 	if len(data) <= checksumLen {
 		return false
@@ -296,20 +307,20 @@ func (ikesa *IKESA) VerifyIKEChecksum(role int, data []byte) bool {
 
 	// Calculate
 	var calculatedChecksum []byte
-	if role == types.Role_Initiator {
-		ikesa.Integ_i.Reset()
-		_, _ = ikesa.Integ_i.Write(checkedData) // hash.Hash.Write() never return an error
-		calculatedChecksum = ikesa.Integ_i.Sum(nil)
-	} else {
+	if ikesa.Role == types.Role_Initiator {
 		ikesa.Integ_r.Reset()
 		_, _ = ikesa.Integ_r.Write(checkedData) // hash.Hash.Write() never return an error
 		calculatedChecksum = ikesa.Integ_r.Sum(nil)
+	} else {
+		ikesa.Integ_i.Reset()
+		_, _ = ikesa.Integ_i.Write(checkedData) // hash.Hash.Write() never return an error
+		calculatedChecksum = ikesa.Integ_i.Sum(nil)
 	}
 
 	return hmac.Equal(checksum, calculatedChecksum)
 }
 
-func (ikesa *IKESA) CalcIKEChecksum(role int, data []byte) error {
+func (ikesa *IKESA) CalcIKEChecksum(data []byte) error {
 	checksumLen := ikesa.integInfo.GetOutputLength()
 	if len(data) <= checksumLen {
 		return errors.New("Input data too short")
@@ -320,7 +331,7 @@ func (ikesa *IKESA) CalcIKEChecksum(role int, data []byte) error {
 
 	// Calculate
 	var calculatedChecksum []byte
-	if role == types.Role_Initiator {
+	if ikesa.Role == types.Role_Initiator {
 		ikesa.Integ_i.Reset()
 		_, _ = ikesa.Integ_i.Write(checkedData) // hash.Hash.Write() never return an error
 		calculatedChecksum = ikesa.Integ_i.Sum(nil)
@@ -335,10 +346,10 @@ func (ikesa *IKESA) CalcIKEChecksum(role int, data []byte) error {
 	return nil
 }
 
-func (ikesa *IKESA) EncryptToSKPayload(role int, data []byte) ([]byte, error) {
+func (ikesa *IKESA) EncryptToSKPayload(data []byte) ([]byte, error) {
 	// Encrypt
 	var cipherText []byte
-	if role == types.Role_Initiator {
+	if ikesa.Role == types.Role_Initiator {
 		var err error
 		if cipherText, err = ikesa.Encr_i.Encrypt(data); err != nil {
 			return nil, fmt.Errorf("Encrypt() failed: %+v", err)
@@ -357,21 +368,21 @@ func (ikesa *IKESA) EncryptToSKPayload(role int, data []byte) ([]byte, error) {
 	return cipherText, nil
 }
 
-func (ikesa *IKESA) DecryptSKPayload(role int, data []byte) ([]byte, error) {
+func (ikesa *IKESA) DecryptSKPayload(data []byte) ([]byte, error) {
 	// Delete checksum field
 	checksumLen := ikesa.integInfo.GetOutputLength()
 	data = data[:len(data)-checksumLen]
 
 	// Decrypt
 	var plainText []byte
-	if role == types.Role_Initiator {
+	if ikesa.Role == types.Role_Initiator {
 		var err error
-		if plainText, err = ikesa.Encr_i.Decrypt(data); err != nil {
+		if plainText, err = ikesa.Encr_r.Decrypt(data); err != nil {
 			return nil, fmt.Errorf("Decrypt() failed: %+v", err)
 		}
 	} else {
 		var err error
-		if plainText, err = ikesa.Encr_r.Decrypt(data); err != nil {
+		if plainText, err = ikesa.Encr_i.Decrypt(data); err != nil {
 			return nil, fmt.Errorf("Decrypt() failed: %+v", err)
 		}
 	}
@@ -388,12 +399,21 @@ func (ikesa *IKESA) CheckMessageID(mID uint32) bool {
 	}
 }
 
+func (ikesa *IKESA) GetAuth(kn3iwf []byte, signedOctets []byte) []byte {
+	authPRF1 := ikesa.prfInfo.Init(kn3iwf)
+	_, _ = authPRF1.Write([]byte("Key Pad for IKEv2")) // hash.Hash.Write() never return an error
+	authPRF2 := ikesa.prfInfo.Init(authPRF1.Sum(nil))
+	_, _ = authPRF2.Write(signedOctets) // hash.Hash.Write() never return an error
+	return authPRF2.Sum(nil)
+}
+
 type ChildSA struct {
 	// SPI
-	SPI uint32
+	SPI      uint32
+	allocspi bool
 
 	// Mark
-	Mark int
+	Mark *uint32
 
 	// IP addresses
 	RemotePublicIPAddr net.IP
@@ -429,6 +449,10 @@ type ChildSA struct {
 }
 
 func (childsa *ChildSA) SelectProposal(proposal *message.Proposal) bool {
+	// Check if ESP
+	if proposal.ProtocolID != types.TypeESP {
+		return false
+	}
 	// DH is optional
 	for _, transform := range proposal.DiffieHellmanGroup {
 		dhType := dh.DecodeTransform(transform)
@@ -494,6 +518,9 @@ func (childsa *ChildSA) SelectProposal(proposal *message.Proposal) bool {
 func (childsa *ChildSA) ToProposal() *message.Proposal {
 	p := new(message.Proposal)
 	p.ProtocolID = types.TypeESP
+	spi := make([]byte, 4)
+	binary.BigEndian.PutUint32(spi, childsa.SPI)
+	p.SPI = spi
 	if childsa.dhInfo != nil {
 		p.DiffieHellmanGroup = append(p.DiffieHellmanGroup, dh.ToTransform(childsa.dhInfo))
 	}
@@ -523,6 +550,14 @@ func (childsa *ChildSA) SetProposal(proposal *message.Proposal) bool {
 		return false
 	}
 	return true
+}
+
+func (childsa *ChildSA) GetDHTransformID() uint16 {
+	if childsa.dhInfo == nil {
+		return 0
+	} else {
+		return childsa.dhInfo.TransformID()
+	}
 }
 
 // CalcKEMaterial generates secret and calculate Diffie-Hellman public key
@@ -606,9 +641,9 @@ func (childsa *ChildSA) GenerateXFRMState(role int, allocspi bool) error {
 	}
 	s.Proto = netlink.XFRM_PROTO_ESP
 	s.Mode = netlink.XFRM_MODE_TUNNEL
-	if childsa.Mark != -1 {
+	if childsa.Mark != nil {
 		s.Mark = &netlink.XfrmMark{
-			Value: uint32(childsa.Mark),
+			Value: uint32(*childsa.Mark),
 		}
 	}
 
@@ -617,10 +652,13 @@ func (childsa *ChildSA) GenerateXFRMState(role int, allocspi bool) error {
 			return err
 		} else {
 			s = s_spi
+			s.Limits.TimeHard = 0
 			childsa.SPI = uint32(s_spi.Spi)
+			childsa.allocspi = true
 		}
 	} else {
 		s.Spi = int(childsa.SPI)
+		childsa.allocspi = false
 	}
 
 	childsa.initiatorToResponderState = s
@@ -652,9 +690,9 @@ func (childsa *ChildSA) GenerateXFRMPolicy(role int) error {
 		p.Dir = netlink.XFRM_DIR_IN
 	}
 	p.Proto = netlink.Proto(childsa.IPProto)
-	if childsa.Mark != -1 {
+	if childsa.Mark != nil {
 		p.Mark = &netlink.XfrmMark{
-			Value: uint32(childsa.Mark),
+			Value: uint32(*childsa.Mark),
 		}
 	}
 
@@ -694,9 +732,12 @@ func (childsa *ChildSA) GenerateXFRMPolicy(role int) error {
 	return nil
 }
 
-func (childsa *ChildSA) SetXFRMState(role int) {
+func (childsa *ChildSA) SetXFRMState(role int) error {
 	// Initiator to responder state
 	s := childsa.initiatorToResponderState
+	if s == nil {
+		return errors.New("initiator to responder state is nil")
+	}
 	if childsa.integKInfo != nil {
 		s.Auth = &netlink.XfrmStateAlgo{
 			Name: childsa.integKInfo.XFRMString(),
@@ -726,6 +767,9 @@ func (childsa *ChildSA) SetXFRMState(role int) {
 
 	// Responder to initiator state
 	s = childsa.responderToInitiatorState
+	if s == nil {
+		return errors.New("responder to initiator state is nil")
+	}
 	if childsa.integKInfo != nil {
 		s.Auth = &netlink.XfrmStateAlgo{
 			Name: childsa.integKInfo.XFRMString(),
@@ -752,11 +796,19 @@ func (childsa *ChildSA) SetXFRMState(role int) {
 			}
 		}
 	}
+
+	return nil
 }
 
 func (childsa *ChildSA) XFRMRuleAdd() error {
-	if err := netlink.XfrmStateAdd(childsa.initiatorToResponderState); err != nil {
-		return fmt.Errorf("netlink.XfrmStateAdd() initiator to responder failed: %+v", err)
+	if childsa.allocspi {
+		if err := netlink.XfrmStateUpdate(childsa.initiatorToResponderState); err != nil {
+			return fmt.Errorf("netlink.XfrmStateUpdate() initiator to responder failed: %+v", err)
+		}
+	} else {
+		if err := netlink.XfrmStateAdd(childsa.initiatorToResponderState); err != nil {
+			return fmt.Errorf("netlink.XfrmStateAdd() initiator to responder failed: %+v", err)
+		}
 	}
 	if err := netlink.XfrmPolicyAdd(childsa.initiatorToResponderPolicy); err != nil {
 		return fmt.Errorf("netlink.XfrmPolicyAdd() initiator to responder failed: %+v", err)
