@@ -5,8 +5,8 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"bitbucket.org/_syujy/ike/message"
-	"bitbucket.org/_syujy/ike/types"
+	"github.com/syujy/ikev2/message"
+	"github.com/syujy/ikev2/types"
 )
 
 func TestStrToType(t *testing.T) {

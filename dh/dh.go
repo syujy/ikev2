@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"bitbucket.org/_syujy/ike/message"
-	"bitbucket.org/_syujy/ike/types"
+	"github.com/syujy/ikev2/message"
+	"github.com/syujy/ikev2/types"
 )
 
 var dhString map[uint16]func(uint16, uint16, []byte) string

@@ -6,7 +6,7 @@ import (
 	"crypto/sha1"
 	"hash"
 
-	"bitbucket.org/_syujy/ike/types"
+	"github.com/syujy/ikev2/types"
 )
 
 const (

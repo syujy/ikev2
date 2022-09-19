@@ -1,4 +1,4 @@
-module bitbucket.org/_syujy/ike
+module github.com/syujy/ikev2
 
 go 1.14
 

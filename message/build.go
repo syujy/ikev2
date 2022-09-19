@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"net"
 
-	"bitbucket.org/_syujy/ike/types"
+	"github.com/syujy/ikev2/types"
 )
 
 func (ikeMessage *IKEMessage) BuildIKEHeader(

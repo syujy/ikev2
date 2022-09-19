@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"io"
 
-	"bitbucket.org/_syujy/ike/internal/lib"
-	types "bitbucket.org/_syujy/ike/types"
+	"github.com/syujy/ikev2/internal/lib"
+	types "github.com/syujy/ikev2/types"
 )
 
 const (

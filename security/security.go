@@ -12,14 +12,14 @@ import (
 	"net"
 	"strings"
 
-	"bitbucket.org/_syujy/ike/dh"
-	"bitbucket.org/_syujy/ike/encr"
-	"bitbucket.org/_syujy/ike/esn"
-	"bitbucket.org/_syujy/ike/integ"
-	"bitbucket.org/_syujy/ike/internal/lib"
-	"bitbucket.org/_syujy/ike/message"
-	"bitbucket.org/_syujy/ike/prf"
-	"bitbucket.org/_syujy/ike/types"
+	"github.com/syujy/ikev2/dh"
+	"github.com/syujy/ikev2/encr"
+	"github.com/syujy/ikev2/esn"
+	"github.com/syujy/ikev2/integ"
+	"github.com/syujy/ikev2/internal/lib"
+	"github.com/syujy/ikev2/message"
+	"github.com/syujy/ikev2/prf"
+	"github.com/syujy/ikev2/types"
 
 	"github.com/vishvananda/netlink"
 )
